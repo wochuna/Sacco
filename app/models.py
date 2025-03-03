@@ -1,7 +1,7 @@
 #from sqlalchemy import Column, Integer, String, LargeBinary, Enum, Boolean, DateTime, func
-import logging
-from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
+from werkzeug.security import generate_password_hash, check_password_hash
+
 
 class Tests(db.Model):
     __tablename__ = 'tests'
@@ -13,30 +13,17 @@ class Tests(db.Model):
     shares_amount = db.Column(db.Float, default=0.0)
     savings_amount = db.Column(db.Float, default=0.0)
 
-    def set_pin(self, pin):
-        """Hash and store the user's PIN securely."""
-        if not isinstance(pin, str):
-            raise ValueError("PIN must be a string")
-        self.pin = generate_password_hash(pin)
-        logging.info(f"Setting PIN for {self.phone_number}: {self.pin}")  # Log hashed PIN
+    def set_pin(self, raw_pin):
+        """Hashes the PIN before storing it."""
+        self.pin = generate_password_hash(raw_pin)
+        print(self.pin)
 
-    def verify_pin(self, pin):
-        """Verify the entered PIN against the stored hash."""
-        if not isinstance(self.pin, str):
-            logging.error(f"Stored PIN for user {self.phone_number} is not a string!")
-            return False
+    def verify_pin(self, raw_pin):
+        """Checks if the entered PIN matches the stored hash."""
+        return check_password_hash(str(self.pin), raw_pin)
 
-        logging.info(f"Verifying PIN for {self.phone_number}. Entered: {pin}, Stored Hash: {self.pin}")
-
-        if check_password_hash(self.pin, pin):
-            logging.info(f"PIN verification successful for {self.phone_number}")
-            return True
-        else:
-            logging.error(f"Invalid PIN for user {self.phone_number}. Entered PIN: '{pin}', Stored Hash: '{self.pin}'")
-            return False
-        
-
-
+    def __repr__(self):
+        return f"<User {self.phone_number}>"
 
 
 """class User(db.Model):
@@ -52,3 +39,4 @@ class Tests(db.Model):
     otp_valid = Column(Boolean, default=False)
     otp_expiry = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=func.current_timestamp())"""
+    

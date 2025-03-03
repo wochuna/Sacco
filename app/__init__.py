@@ -1,11 +1,9 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-import os
 from dotenv import load_dotenv
+import os
 
-load_dotenv()  # Load environment variables
-
-# Create a single instance of SQLAlchemy
+load_dotenv()
 db = SQLAlchemy()
 
 def create_app():
@@ -25,13 +23,14 @@ def create_app():
     # Initialize SQLAlchemy with the app
     db.init_app(app)
 
-    # Import and register blueprints after db initialization
-    from app.routes.ussd import ussd_bp
+    from app.routes.ussd_routes import ussd_bp
     app.register_blueprint(ussd_bp, url_prefix="/api")
 
-    # Create tables
+
     with app.app_context():
-        db.create_all()  # Creates all tables based on your models
+        from app.models import Tests
+        if os.getenv("FLASK_ENV") == "development":
+            db.create_all()
 
     return app
 
