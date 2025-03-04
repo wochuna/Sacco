@@ -9,6 +9,12 @@ from app.models import Tests
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
+def mask_sensitive_info(data, visible_start=4, visible_end=2):
+    """Mask sensitive information, showing only the first few and last few characters."""
+    if len(data) <= (visible_start + visible_end):
+        return "*" * len(data)#mask everything for short data
+    return data[:visible_start] + "x" * (len(data) - (visible_start + visible_end)) + data[-visible_end:]
+
 def register_user(phone_number, national_id, pin):
     """Register a new user while logging actions and handling errors."""
     phone_number = normalize_phone_number(phone_number)
@@ -20,10 +26,9 @@ def register_user(phone_number, national_id, pin):
     if existing_user:
         logging.warning(f"Registration failed: User already exists - {phone_number} or {national_id}")
         return {"status": False, "message": "User with this phone number or national ID already exists."}
-    
+
     new_user = Tests(phone_number=phone_number, national_id=national_id, pin = pin)
     new_user.set_pin(pin)
-    
 
     logging.info(f"Registering user: {phone_number}, Hashed PIN: {new_user.pin}")
 

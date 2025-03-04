@@ -27,7 +27,7 @@ def handle_ussd_request(session_id, service_code, phone_number, text):
     elif text.startswith("1*") and len(text.split('*')) == 2:
         try:
             pin = text.split('*', 1)[1].strip() if text.startswith("1*") else text.strip()
-            
+
             registered_user = Tests.query.filter_by(phone_number=phone_number).first()
 
             if registered_user:
