@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import mysql.connector
 from werkzeug.security import check_password_hash
 from flask import make_response, current_app
@@ -9,11 +10,29 @@ from app.models import Tests
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-def mask_sensitive_info(data, visible_start=4, visible_end=2):
-    """Mask sensitive information, showing only the first few and last few characters."""
-    if len(data) <= (visible_start + visible_end):
-        return "*" * len(data)#mask everything for short data
-    return data[:visible_start] + "x" * (len(data) - (visible_start + visible_end)) + data[-visible_end:]
+def mask_sensitive_info(data, visible_start=2, visible_end=2):
+    """Mask sensitive information, keeping only a few visible characters."""
+    if isinstance(data, str) and len(data) > (visible_start + visible_end):
+        return data[:visible_start] + "*" * (len(data) - visible_start - visible_end) + data[-visible_end:]
+    return "*" * len(data)  # Fully mask short data
+
+def sanitize_log_message(message):
+    """Mask phone numbers, national IDs, PINs, and hashes in log messages."""
+    message = re.sub(r"phone_number='(\d{10,})'", lambda m: f"phone_number='{mask_sensitive_info(m.group(1))}'", message)
+    message = re.sub(r"national_id='(\d+)'", lambda m: f"national_id='{mask_sensitive_info(m.group(1))}'", message)
+    message = re.sub(r"pin='(\d+)'", lambda m: f"pin='****'", message)
+    message = re.sub(r"scrypt:\d+:\d+:\d+\$[a-zA-Z0-9+/]+(\$[a-zA-Z0-9+/]+)?", "****HASH****", message)
+    return message
+
+class MaskingFormatter(logging.Formatter):
+    """Custom logging formatter that sanitizes log messages."""
+    def format(self, record):
+        record.msg = sanitize_log_message(str(record.msg))
+        return super().format(record)
+
+# Apply custom formatter to all log handlers
+for handler in logging.getLogger().handlers:
+    handler.setFormatter(MaskingFormatter("%(asctime)s - %(levelname)s - %(message)s"))
 
 def register_user(phone_number, national_id, pin):
     """Register a new user while logging actions and handling errors."""
@@ -24,18 +43,20 @@ def register_user(phone_number, national_id, pin):
     ).first()
 
     if existing_user:
-        logging.warning(f"Registration failed: User already exists - {phone_number} or {national_id}")
+        logging.warning(f"Registration failed: User already exists - phone_number='{mask_sensitive_info(phone_number)}' or national_id='{mask_sensitive_info(national_id)}'")
         return {"status": False, "message": "User with this phone number or national ID already exists."}
 
-    new_user = Tests(phone_number=phone_number, national_id=national_id, pin = pin)
+    new_user = Tests(phone_number=phone_number, national_id=national_id)
+    
+
     new_user.set_pin(pin)
 
-    logging.info(f"Registering user: {phone_number}, Hashed PIN: {new_user.pin}")
+    logging.info(f"Registering user: phone_number='{mask_sensitive_info(phone_number)}', national_id='{mask_sensitive_info(national_id)}', pin='****'")  
 
     try:
         db.session.add(new_user)
         db.session.commit()
-        logging.info(f"User registered successfully: {phone_number}")
+        logging.info(f"User registered successfully: phone_number='{mask_sensitive_info(phone_number)}'")
         return {"status": True, "message": "User registered successfully!", "phone_number": phone_number}
     except Exception as e:
         db.session.rollback()
@@ -56,13 +77,13 @@ def verify_pin(user, pin):
         logging.error("PIN verification failed: User not found or no PIN stored.")
         return False
 
-    logging.info(f"Verifying PIN for {user.phone_number}")
+    logging.info(f"Verifying PIN for phone_number='{mask_sensitive_info(user.phone_number)}'")
 
     if check_password_hash(user.pin, pin):
-        logging.info(f"PIN verification successful for {user.phone_number}")
+        logging.info(f"PIN verification successful for phone_number='{mask_sensitive_info(user.phone_number)}'")
         return True
     else:
-        logging.error(f"Invalid PIN for user {user.phone_number}")
+        logging.error(f"Invalid PIN for user phone_number='{mask_sensitive_info(user.phone_number)}'")
         return False
 
 def ussd_response(message, status=200):
