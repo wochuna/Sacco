@@ -1,7 +1,7 @@
 import logging
 from flask import make_response
 from app.models import Tests
-from app.helpers.utils import normalize_phone_number, verify_pin, register_user, ussd_response
+from app.helpers.utils import normalize_phone_number, verify_pin, register_user, ussd_response, process_withdrawal
 
 def handle_ussd_request(session_id, service_code, phone_number, text):
     """Process USSD requests and return appropriate responses."""
@@ -11,6 +11,8 @@ def handle_ussd_request(session_id, service_code, phone_number, text):
         return ussd_response("END Error: Invalid phone number format.", 400)
 
     logging.info(f"USSD Request: phone_number='{phone_number}', text='{text}'")
+    logging.info(f"Received USSD Request: text='{text}'")
+
 
     if text == "":
         text = "CON Welcome to our SACCO \n"
@@ -72,26 +74,77 @@ def handle_ussd_request(session_id, service_code, phone_number, text):
     elif text == "0":
         text = "END Thank you for using our SACCO services."
 
+    # Withdrawals Flow
     elif text == "1*1":
-        # Withdrawals
-        text = "CON Withdraw from: \n"
-        text += "1. Savings \n"
-        text += "2. Loan \n"
+        text = "CON Select withdrawal option:\n1. To Savings\n2. To Mobile Money"
 
-    elif text == "1*1*1" or text == "1*1*2":
-        # Choose withdrawal type
-        withdrawal_type = "savings" if text.endswith("*1") else "loan"
-        text = "CON Withdraw to: \n"
-        text += "1. Mobile Money \n"
-        text += "2. M-Pesa \n"
+    elif text == "1*1*1":
+        text = "CON Enter amount to transfer to Savings:"
 
-    elif text == "1*1*1*1" or text == "1*1*1*2":
-        # Enter amount to withdraw
-        text = "CON Enter the amount you wish to withdraw:"
-    elif text.startswith("1*1*1*1*") or text.startswith("1*1*1*2*"):
-        amount = text.split('*')[-1]  # Get the amount
-        withdrawal_type = "savings" if "1*1*1*1*" in text else "loan"
-        text = f"END You have successfully withdrawn KES {amount} from your {withdrawal_type}."
+    elif text.startswith("1*1*1*"):
+        amount = text.split("*")[-1]
+        text = "CON Enter your PIN to confirm transfer to Savings:"
+
+    elif text.startswith("1*1*1*" and len(text.split("*")) == 4):
+        pin = text.split("*")[-1]
+        result = process_withdrawal(phone_number, "sacco_wallet", "savings", amount, pin)
+        text = f"END {result['message']}"
+
+    elif text == "1*1*2":
+        text = "CON Select provider:\n1. M-Pesa\n2. Airtel Money"
+
+    elif text.startswith("1*1*2*") and len(text.split("*")) == 3:
+        provider = "M-Pesa" if text.split("*")[-1] == "1" else "Airtel Money"
+        text = "CON Enter phone number for mobile money withdrawal:"
+
+    elif text.startswith("1*1*2*") and len(text.split("*")) == 4:
+        phone = text.split("*")[-1]
+        text = "CON Enter amount to withdraw to Mobile Money:"
+
+    elif text.startswith("1*1*2*") and len(text.split("*")) == 5:
+        amount = text.split("*")[-1]
+        text = "CON Enter your PIN to confirm Mobile Money withdrawal:"
+
+    elif text.startswith("1*1*2*") and len(text.split("*")) == 6:
+        pin = text.split("*")[-1]
+        result = process_withdrawal(phone_number, "sacco_wallet", provider, amount, pin, phone)
+        text = f"END {result['message']}"
+
+    elif text == "1*2":
+        text = "CON Select withdrawal option:\n1. To Sacco Wallet\n2. To Mobile Money"
+
+    elif text == "1*2*1":
+        text = "CON Enter amount to transfer to Sacco Wallet:"
+
+    elif text.startswith("1*2*1*"):
+        amount = text.split("*")[-1]
+        text = "CON Enter your PIN to confirm transfer to Sacco Wallet:"
+
+    elif text.startswith("1*2*1*" and len(text.split("*")) == 4):
+        pin = text.split("*")[-1]
+        result = process_withdrawal(phone_number, "savings", "sacco_wallet", amount, pin)
+        text = f"END {result['message']}"
+
+    elif text == "1*2*2":
+        text = "CON Select provider:\n1. M-Pesa\n2. Airtel Money"
+
+    elif text.startswith("1*2*2*") and len(text.split("*")) == 3:
+        provider = "M-Pesa" if text.split("*")[-1] == "1" else "Airtel Money"
+        text = "CON Enter phone number for mobile money withdrawal:"
+
+    elif text.startswith("1*2*2*") and len(text.split("*")) == 4:
+        phone = text.split("*")[-1]
+        text = "CON Enter amount to withdraw to Mobile Money:"
+
+    elif text.startswith("1*2*2*") and len(text.split("*")) == 5:
+        amount = text.split("*")[-1]
+        text = "CON Enter your PIN to confirm Mobile Money withdrawal:"
+
+    elif text.startswith("1*2*2*") and len(text.split("*")) == 6:
+        pin = text.split("*")[-1]
+        result = process_withdrawal(phone_number, "savings", provider, amount, pin, phone)
+        text = f"END {result['message']}"
+
 
     elif text == "1*2":
         text = "CON Deposit to: \n"
@@ -100,7 +153,6 @@ def handle_ussd_request(session_id, service_code, phone_number, text):
         text += "3. Shares \n"
 
     elif text.startswith("1*2*"):
-        # Handle deposits
         deposit_type = ""
         if text == "1*2*1":
             deposit_type = "Loan Repayment"
@@ -122,32 +174,47 @@ def handle_ussd_request(session_id, service_code, phone_number, text):
             deposit_type = "Shares"
         text = f"END You have successfully deposited KES {amount} to {deposit_type}."
 
-    elif text == "1*3":
-        # Account Management
-        text = "CON Account Management: \n"
-        text += "1. Change PIN \n"
-        text += "2. Request Statement & Balance \n"
 
-    elif text == "1*3*1":
-        # Change PIN
-        text = "CON Enter your current PIN:"
-    elif text.startswith("1*3*1*"):
-        current_pin = text.split('*')[2]
-        new_pin = text.split('*')[3]
-        if current_pin in registered_user:
-            registered_user[new_pin] = registered_user.pop(current_pin)
-            text = "END Your PIN has been changed successfully."
-        else:
-            text = "END Invalid current PIN."
-    elif text == "1*3*2":
-        # Request Statement & Balance
-        pin = text.split('*')[2]
-        if pin in registered_user:
-            transactions = "\n".join(registered_user[pin]["transactions"])
-            balance = registered_user[pin]["balance"]
-            text = f"END Your last 5 transactions are:\n{transactions}\nYour balance is KES {balance}."
-        else:
-            text = "END Invalid PIN."
+    elif text == "1*3":
+        text = "CON Account Management:\n"
+        text += "1. Update PIN\n"
+        text += "2. View Account Details\n"
+
+    elif text.startswith("3*"):
+        parts = text.split('*')
+        if len(parts) == 2:
+            option = parts[1].strip()
+            if option == "1":
+                text = "CON Enter your current PIN:"
+            elif option == "2":
+                text = "CON Enter your PIN to view account details:"
+            else:
+                text = "END Invalid option. Please try again."
+        elif len(parts) == 3:
+            option = parts[1].strip()
+            pin = parts[2].strip()
+            registered_user = Tests.query.filter_by(phone_number=phone_number).first()
+            
+            if registered_user and registered_user.verify_pin(pin):
+                if option == "1":
+                    text = "CON Enter new PIN:"
+                elif option == "2":
+                    text = f"END Account Details:\nPhone: {registered_user.phone_number}\nnational_id: {registered_user.national_id}\n"
+            else:
+                text = "END Invalid PIN. Please try again."
+        elif len(parts) == 4 and parts[1] == "1":
+            new_pin = parts[3].strip()
+            text = "CON Confirm new PIN:"
+        elif len(parts) == 5 and parts[1] == "1":
+            new_pin = parts[3].strip()
+            confirm_pin = parts[4].strip()
+            
+            if new_pin == confirm_pin:
+                registered_user.set_pin(new_pin)
+                db.session.commit()
+                text = "END PIN changed successfully!"
+            else:
+                text = "END PINs do not match. Try again."
 
     elif text == "1*4":
         # Enquiries
