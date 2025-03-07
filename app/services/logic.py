@@ -1,7 +1,7 @@
 import logging
 from flask import make_response
-from app.models import Tests
-from app.helpers.utils import normalize_phone_number, verify_pin, register_user, ussd_response, process_withdrawal
+from app.models import Tests, Withdrawals, Transactions
+from app.helpers.utils import normalize_phone_number, verify_pin, register_user, ussd_response, process_withdrawal, process_deposit
 
 def handle_ussd_request(session_id, service_code, phone_number, text):
     """Process USSD requests and return appropriate responses."""
@@ -40,7 +40,8 @@ def handle_ussd_request(session_id, service_code, phone_number, text):
                     text += "1. Withdrawals \n"
                     text += "2. Deposits \n"
                     text += "3. Account Management \n"
-                    text += "4. Enquiries \n"
+                    text += "4. Loans \n"
+                    text += "5. Enquiries \n"
                     text += "0. Exit \n"
                 else:
                     logging.error(f"Invalid PIN for user {phone_number}. Entered PIN: '{pin}', Stored Hash: '{registered_user.pin}'")
@@ -145,35 +146,72 @@ def handle_ussd_request(session_id, service_code, phone_number, text):
         result = process_withdrawal(phone_number, "savings", provider, amount, pin, phone)
         text = f"END {result['message']}"
 
+# Deposit main menu
+    elif text == "2":
+        text = "CON Choose deposit method:\n"
+        text += "1. Mobile Money\n"
+        text += "2. SACCO Wallet\n"
 
-    elif text == "1*2":
-        text = "CON Deposit to: \n"
-        text += "1. Loan Repayment \n"
-        text += "2. Savings \n"
-        text += "3. Shares \n"
+# Mobile Money submenu
+    elif text == "2*1":
+        text = "CON Choose deposit destination:\n"
+        text += "1. SACCO Wallet\n"
+        text += "2. Savings\n"
 
-    elif text.startswith("1*2*"):
-        deposit_type = ""
-        if text == "1*2*1":
-            deposit_type = "Loan Repayment"
-        elif text == "1*2*2":
-            deposit_type = "Savings"
-        elif text == "1*2*3":
-            deposit_type = "Shares"
-        text = "CON Deposit via: \n"
-        text += "1. M-Pesa \n"
-        text += "2. Mobile Money \n"
+# Choose mobile provider
+    elif text in ["2*1*1", "2*1*2"]:
+        destination = "SACCO Wallet" if text == "2*1*1" else "Savings"
+        text = "CON Choose mobile provider:\n"
+        text += "1. M-Pesa\n"
+        text += "2. Airtel Money\n"
 
-    elif text.startswith("1*2*1*1") or text.startswith("1*2*1*2") or text.startswith("1*2*2*1") or text.startswith("1*2*2*2") or text.startswith("1*2*3*1") or text.startswith("1*2*3*2"):
-        amount = text.split('*')[-1]
-        if "1*2*1" in text:
-            deposit_type = "Loan Repayment"
-        elif "1*2*2" in text:
-            deposit_type = "Savings"
-        elif "1*2*3" in text:
-            deposit_type = "Shares"
-        text = f"END You have successfully deposited KES {amount} to {deposit_type}."
+    elif text in ["2*1*1*1", "2*1*1*2", "2*1*2*1", "2*1*2*2"]:
+        provider = "M-Pesa" if text.endswith("1") else "Airtel Money"
+        text = "CON Enter your mobile number:"
 
+    elif text.startswith("2*1*1*") or text.startswith("2*1*2*"):
+        parts = text.split('*')
+        if len(parts) == 5:
+            text = "CON Enter deposit amount:"
+        elif len(parts) == 6:
+            text = "CON Enter your PIN to confirm transaction:"
+        elif len(parts) == 7:
+            provider = "M-Pesa" if parts[3] == "1" else "Airtel Money"
+            destination = "SACCO Wallet" if parts[2] == "1" else "Savings"
+            phone_number = parts[4]
+            amount = parts[5]
+            pin = parts[6]
+
+            logging.info(f"Processing deposit: Provider={provider}, Destination={destination}, Phone={phone_number}, Amount={amount}")
+            transaction_status = process_deposit(phone_number, amount, provider, destination)
+
+            if transaction_status["status"]:
+                text = f"END Deposit of KES {amount} from {provider} to {destination} is being processed."
+            else:
+                text = f"END Deposit failed: {transaction_status['message']}"
+
+# Deposit from SACCO Wallet to Savings
+    elif text == "2*2":
+        text = "CON Enter your SACCO Wallet number:"
+
+    elif text.startswith("2*2*"):
+        parts = text.split('*')
+        if len(parts) == 3:
+            text = "CON Enter deposit amount:"
+        elif len(parts) == 4:
+            text = "CON Enter your PIN to confirm transaction:"
+        elif len(parts) == 5:
+            wallet_number = parts[2]
+            amount = parts[3]
+            pin = parts[4]
+
+            logging.info(f"Processing SACCO Wallet deposit: Wallet={wallet_number}, Amount={amount}")
+            transaction_status = process_deposit(wallet_number, amount, "SACCO Wallet", "Savings")
+
+            if transaction_status["status"]:
+                text = f"END Deposit of KES {amount} from SACCO Wallet to Savings is being processed."
+            else:
+                text = f"END Deposit failed: {transaction_status['message']}"
 
     elif text == "1*3":
         text = "CON Account Management:\n"
@@ -194,7 +232,7 @@ def handle_ussd_request(session_id, service_code, phone_number, text):
             option = parts[1].strip()
             pin = parts[2].strip()
             registered_user = Tests.query.filter_by(phone_number=phone_number).first()
-            
+
             if registered_user and registered_user.verify_pin(pin):
                 if option == "1":
                     text = "CON Enter new PIN:"
@@ -208,7 +246,7 @@ def handle_ussd_request(session_id, service_code, phone_number, text):
         elif len(parts) == 5 and parts[1] == "1":
             new_pin = parts[3].strip()
             confirm_pin = parts[4].strip()
-            
+
             if new_pin == confirm_pin:
                 registered_user.set_pin(new_pin)
                 db.session.commit()
@@ -216,22 +254,54 @@ def handle_ussd_request(session_id, service_code, phone_number, text):
             else:
                 text = "END PINs do not match. Try again."
 
-    elif text == "1*4":
-        # Enquiries
-        text = "CON Enquiries: \n"
-        text += "1. FAQs \n"
-        text += "2. Help \n"
+# Enquiries Menu
+elif text == "1*5":
+    text = "CON Choose an enquiry option:\n"
+    text += "1. Mini Statement\n"
+    text += "2. FAQs\n"
+    text += "3. Help\n"
 
-    elif text == "1*4*1":
-        # FAQs
-        text = "END Frequently Asked Questions: \n"
-        text += "1. How do I reset my PIN? \n"
-        text += "2. How do I check my balance? \n"
-        text += "3. What to do if I forget my PIN? \n"
+# Mini Statement
+elif text == "1*5*1":
+    text = "CON Enter your PIN to access Mini Statement:"
 
-    elif text == "1*4*2":
-        # Help
-        text = "END For assistance, contact customer support at 0712345678 or visit our website."
+# Mini Statement
+elif text.startswith("1*5*1*"):  
+    user_pin = text.split("*")[-1]
+    correct_pin = get_user_pin(phone_number)
+
+    if user_pin == correct_pin:
+        transactions = get_recent_transactions(phone_number, limit=5)
+        if transactions:
+            text = "END Last 5 Transactions:\n"
+            for txn in transactions:
+                text += f"{txn['date']}: {txn['type']} {txn['amount']}\n"
+        else:
+            text = "END No recent transactions found."
+    else:
+        text = "END Incorrect PIN. Please try again."
+
+# FAQs Menu
+elif text == "1*5*2":
+    text = "CON FAQs:\n"
+    text += "1. How to check balance?\n"
+    text += "2. How to apply for a loan?\n"
+    text += "3. How to reset PIN?\n"
+    text += "4. How to contact support?\n"
+
+# FAQs Answers
+elif text == "1*5*2*1":
+    text = "END To check balance, go to Enquiries > Mini Statement."
+elif text == "1*5*2*2":
+    text = "END To apply for a loan, navigate to Loans and follow the instructions."
+elif text == "1*5*2*3":
+    text = "END To reset PIN, contact customer support at 0720000000."
+elif text == "1*5*2*4":
+    text = "END You can reach customer support via 0720000000."
+
+# Help - Contact Support
+elif text == "1*5*3":
+    text = "END Please contact customer support via 0720000000."
 
     resp = make_response(text, 200)
     resp.headers['Content-Type'] = "text/plain"

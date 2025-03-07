@@ -3,7 +3,7 @@ import re
 from werkzeug.security import check_password_hash
 from flask import make_response, current_app
 from app import db
-from app.models import Tests, Sessions
+from app.models import Tests, Withdrawals, Transactions
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -36,6 +36,9 @@ def validate_national_id(national_id):
     """Validate national ID: Must be 8 or 9 digits."""
     return bool(re.match(r"^\d{8,9}$", national_id))
 
+def validate_pin(pin):
+    """Validate pin:Must be 4 digits."""
+    return bool(re.match(r"^\d{4}$", pin))
 
 def register_user(phone_number, national_id, pin):
     """Register a new user and start a session."""
@@ -50,6 +53,11 @@ def register_user(phone_number, national_id, pin):
     if not validate_national_id(national_id):
         logging.warning(f"Invalid national ID: '{national_id}'")
         return {"status": False, "message": "Invalid national ID.Please try again"}
+
+    # Validate pin
+    if not validate_pin(pin):
+        logging.warning(f"Invalid pin:'{pin}'")
+        return {"status": False, "message": "Invalid pin.Please try again"}
 
     existing_user = Tests.query.filter(
         (Tests.phone_number == phone_number) | (Tests.national_id == national_id)
@@ -168,3 +176,45 @@ def process_withdrawal(user, amount, pin, account_type, withdrawal_method, provi
         return balance_update  # Return balance update failure message
 
     return {"status": True, "message": "Withdrawal successful."}
+
+
+def process_deposit(phone_number, amount, source, destination):
+    """
+    Process deposit transactions.
+
+    :param phone_number: The phone number initiating the deposit.
+    :param amount: The amount to deposit.
+    :param source: The source of funds (Mobile Money or SACCO Wallet).
+    :param destination: The destination account (Savings or SACCO Wallet).
+    :return: Dictionary with transaction status and message.
+    """
+    try:
+        # Validate amount
+        amount = float(amount)
+        if amount <= 0:
+            return {"status": False, "message": "Invalid deposit amount."}
+
+        # Find the user
+        user = Tests.query.filter_by(phone_number=phone_number).first()
+        if not user:
+            return {"status": False, "message": "User not found."}
+
+        # Process transaction 
+        new_transaction = Transactions(
+            phone_number=phone_number,
+            amount=amount,
+            transaction_type="deposit",
+            source=source,
+            destination=destination,
+        )
+
+        db.session.add(new_transaction)
+        db.session.commit()
+
+        logging.info(f"Deposit successful: {amount} from {source} to {destination} for {phone_number}")
+
+        return {"status": True, "message": f"Deposit of KES {amount} to {destination} successful."}
+
+    except Exception as e:
+        logging.error(f"Error processing deposit: {str(e)}")
+        return {"status": False, "message": "An error occurred. Please try again."}
