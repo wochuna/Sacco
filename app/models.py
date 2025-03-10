@@ -9,8 +9,10 @@ class Tests(db.Model):
     phone_number = db.Column(db.String(15), unique=True, nullable=False)
     national_id = db.Column(db.String(20), unique=True, nullable=False)
     pin = db.Column(db.String(128), nullable=False)
-    shares_amount = db.Column(db.Float, default=0.0)
-    savings_amount = db.Column(db.Float, default=0.0)
+    created_at = db.Column(db.TIMESTAMP, default=datetime.utcnow, nullable=True)
+    updated_at = db.Column(db.TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=True)
+    failed_attempts = db.Column(db.Integer, default=0, nullable=True)
+    pin_last_attempt = db.Column(db.TIMESTAMP, nullable=True)
 
     def set_pin(self, raw_pin):
         """Hashes the PIN before storing it."""

@@ -101,12 +101,10 @@ def verify_pin(user, pin):
 
     if check_password_hash(user.pin, pin):
         logging.info(f"PIN verification successful for phone_number='{mask_sensitive_info(user.phone_number)}'")
-
-
-        return {"status": True}
+        return True
     else:
         logging.error(f"Invalid PIN for user phone_number='{mask_sensitive_info(user.phone_number)}'")
-        return {"status": False}
+        return False
 
 def ussd_response(message, status=200):
     """Return a formatted USSD response with UTF-8 encoding."""
@@ -120,8 +118,7 @@ def validate_withdrawal(user, amount, pin):
         return {"status": False, "message": "User not found."}
 
     # Verify PIN
-    pin_verification = verify_pin(user, pin)
-    if not pin_verification["status"]:
+    if not verify_pin(user, pin):
         return {"status": False, "message": "Incorrect PIN."}
 
     # Check if user has enough balance
@@ -129,6 +126,7 @@ def validate_withdrawal(user, amount, pin):
         return {"status": False, "message": "Insufficient funds."}
 
     return {"status": True}
+
 
 def update_balance(user, amount):
     """Update the user's balance after a successful withdrawal."""
@@ -151,7 +149,7 @@ def process_withdrawal(user, amount, pin, account_type, withdrawal_method, provi
     if account_type == "sacco_wallet":
         if withdrawal_method == "savings":
             logging.info(f"Transferring {amount} from Sacco Wallet to Savings for user {mask_sensitive_info(user.phone_number)}")
-            user.savings_balance += amount  # Add to savings
+            user.savings_balance += amount
         elif withdrawal_method == "mobile_money":
             if not provider or not phone_number or not validate_phone_number(phone_number):
                 return {"status": False, "message": "Invalid mobile money details."}
@@ -173,7 +171,7 @@ def process_withdrawal(user, amount, pin, account_type, withdrawal_method, provi
     # Deduct from original account balance
     balance_update = update_balance(user, amount)
     if not balance_update["status"]:
-        return balance_update  # Return balance update failure message
+        return balance_update
 
     return {"status": True, "message": "Withdrawal successful."}
 
@@ -199,7 +197,7 @@ def process_deposit(phone_number, amount, source, destination):
         if not user:
             return {"status": False, "message": "User not found."}
 
-        # Process transaction 
+        # Process transaction
         new_transaction = Transactions(
             phone_number=phone_number,
             amount=amount,
