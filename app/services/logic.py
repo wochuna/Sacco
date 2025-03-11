@@ -1,7 +1,13 @@
 import logging
 from flask import make_response
-from app.models import Tests, Withdrawals, Transactions
-from app.helpers.utils import normalize_phone_number, verify_pin, register_user, ussd_response, process_withdrawal, process_deposit
+from app.models import Tests
+from app.helpers.utils import (
+    normalize_phone_number,
+    register_user,
+    ussd_response,
+    process_withdrawal,
+    process_deposit,
+)
 
 def handle_ussd_request(session_id, service_code, phone_number, text):
     """Process USSD requests and return appropriate responses."""
@@ -23,7 +29,7 @@ def handle_ussd_request(session_id, service_code, phone_number, text):
     elif text.startswith("1*") and len(text.split('*')) == 2:
         pin = text.split('*')[1]
         registered_user = Tests.query.filter_by(phone_number=phone_number).first()
-        
+
         if registered_user and registered_user.verify_pin(pin):
             text = "CON Login successful! Choose an option: \n"
             text += "1. Withdrawals \n"
@@ -37,7 +43,7 @@ def handle_ussd_request(session_id, service_code, phone_number, text):
 
     elif text == "2":
         text = "CON Enter your phone number:"
-    
+
     elif text.startswith("2*"):
         parts = text.split('*')
         if len(parts) == 2:
@@ -49,38 +55,107 @@ def handle_ussd_request(session_id, service_code, phone_number, text):
             registration_message = register_user(phone_number, national_id, pin)
             text = f"END {registration_message['message'] if 'message' in registration_message else registration_message}"
 
-    elif text.startswith("1*") and len(text.split("*")) == 3:
+    # Handling menu options after login
+    elif text.startswith("1*") and len(text.split("*")) == 3:  # Option selected after login
         _, pin, option = text.split("*")
         registered_user = Tests.query.filter_by(phone_number=phone_number).first()
 
         if registered_user and registered_user.verify_pin(pin):
             if option == "1":  # Withdrawals
-                text = "CON Select withdrawal option:\n1. To Savings\n2. To Mobile Money"
+                text = "CON Withdrawal from:\n1. Sacco Wallet \n2. Savings Account \n"
             elif option == "2":  # Deposits
-                text = "CON Choose deposit method:\n1. Mobile Money\n2. SACCO Wallet"
+                text = "CON Choose deposit from:\n1. Mobile Money\n2. SACCO Wallet\n"
             elif option == "3":  # Account Management
-                text = "CON Account Management:\n1. Update PIN\n2. View Account Details"
+                text = "CON Account Management:\n1. Update PIN\n2. View Account Details\n"
             elif option == "4":  # Loans
-                text = "CON Choose an option for Loans:\n1. Apply for a Loan\n2. Loan Status"
+                text = "CON Choose an option for Loans:\n1. Apply for a loan\n2. Loan Status\n"
             elif option == "5":  # Enquiries
-                text = "CON Choose an enquiry option:\n1. Mini Statement\n2. FAQs\n3. Help"
+                text = "CON Choose an enquiry option:\n1. Mini Statement\n2. FAQs\n3. Help\n"
+            elif option == "0":  # Exit
+                text = "END Thank you for using our SACCO service!"
         else:
             text = "END Invalid PIN. Please try again."
 
-    # Handle Withdrawals Flow
-    elif text.startswith("1*") and len(text.split("*")) == 4:
-        _, pin, option, sub_option = text.split("*")
-        
-        if option == "1" and sub_option == "1":
-            text = "CON Enter amount to transfer to Savings:"
-        elif option == "1" and sub_option == "2":
-            text = "CON Select provider:\n1. M-Pesa\n2. Airtel Money"
-        elif option == "2" and sub_option == "1":
-            text = "CON Enter amount to transfer to Sacco Wallet:"
-        elif option == "2" and sub_option == "2":
-            text = "CON Select provider:\n1. M-Pesa\n2. Airtel Money"
+    # Withdrawals
+    elif text.startswith("1*1*") and len(text.split("*")) == 4:  # From Sacco Wallet to Savings Account
+        _, pin, option, amount = text.split("*")
+        registered_user = Tests.query.filter_by(phone_number=phone_number).first()
+        logging.info("Withdrawing from Sacco Wallet to Savings Account. Amount: %s", amount)
 
-    # Handle Deposits Flow
+        if registered_user and registered_user.verify_pin(pin):
+            withdrawal_result = process_withdrawal(registered_user, float(amount), pin, "savings", "sacco_wallet")
+            text = f"END {withdrawal_result['message']}"
+        else:
+            text = "END Invalid PIN. Please try again."
+
+    elif text.startswith("1*2*") and len(text.split("*")) == 3:  # From Sacco Wallet to Mobile Money
+        _, pin, option = text.split("*")
+
+        if option == "1":  # M-Pesa
+            text = "CON Enter your mobile number:"
+        elif option == "2":  # Airtel Money
+            text = "CON Enter your mobile number:"
+
+    elif text.startswith("1*2*") and len(text.split("*")) == 4:  # Enter mobile number for Mobile Money
+        _, pin, option, mobile_number = text.split("*")
+        text = "CON Enter amount to withdraw:"
+
+    elif text.startswith("1*2*") and len(text.split("*")) == 5:  # Enter amount for Mobile Money
+        _, pin, option, mobile_number, amount = text.split("*")
+        text = "CON Confirm your PIN to complete the transaction:"
+
+    elif text.startswith("1*2*") and len(text.split("*")) == 6:  # Confirm PIN for Mobile Money
+        _, pin, option, mobile_number, amount, pin_confirm = text.split("*")
+        registered_user = Tests.query.filter_by(phone_number=phone_number).first()
+
+        if registered_user and registered_user.verify_pin(pin_confirm):
+            provider = "M-Pesa" if option == "1" else "Airtel Money"
+            withdrawal_result = process_withdrawal(registered_user, float(amount), pin_confirm, "mobile_money", mobile_number, provider)
+            text = f"END {withdrawal_result['message']}"
+        else:
+            text = "END Invalid PIN. Please try again."
+
+    # Withdraw from Savings Account to Sacco Wallet
+    elif text.startswith("2*1*") and len(text.split("*")) == 3:  # Enter amount to Sacco Wallet
+        _, pin, amount = text.split("*")
+        registered_user = Tests.query.filter_by(phone_number=phone_number).first()
+        logging.info("Withdrawing from Savings Account to Sacco Wallet. Amount: %s", amount)
+
+        if registered_user and registered_user.verify_pin(pin):
+            withdrawal_result = process_withdrawal(registered_user, float(amount), pin, "sacco_wallet", "savings")
+            text = f"END {withdrawal_result['message']}"
+        else:
+            text = "END Invalid PIN. Please try again."
+
+    # Choose provider for Mobile Money withdrawal from Savings Account
+    elif text.startswith("2*2*") and len(text.split("*")) == 3:  # Choose provider for Mobile Money
+        _, pin, option = text.split("*")
+
+        if option == "1":  # M-Pesa
+            text = "CON Enter your mobile number:"
+        elif option == "2":  # Airtel Money
+            text = "CON Enter your mobile number:"
+
+    elif text.startswith("2*2*") and len(text.split("*")) == 4:  # Enter mobile number for Mobile Money
+        _, pin, option, mobile_number = text.split("*")
+        text = "CON Enter amount to withdraw:"
+
+    elif text.startswith("2*2*") and len(text.split("*")) == 5:  # Enter amount for Mobile Money
+        _, pin, option, mobile_number, amount = text.split("*")
+        text = "CON Confirm your PIN to complete the transaction:"
+
+    elif text.startswith("2*2*") and len(text.split("*")) == 6:  # Confirm PIN for Mobile Money withdrawal
+        _, pin, option, mobile_number, amount, pin_confirm = text.split("*")
+        registered_user = Tests.query.filter_by(phone_number=phone_number).first()
+
+        if registered_user and registered_user.verify_pin(pin_confirm):
+            provider = "M-Pesa" if option == "1" else "Airtel Money"
+            withdrawal_result = process_withdrawal(registered_user, float(amount), pin_confirm, "mobile_money", mobile_number, provider)
+            text = f"END {withdrawal_result['message']}"
+        else:
+            text = "END Invalid PIN. Please try again."
+
+    # Deposits
     elif text.startswith("2*") and len(text.split("*")) == 2:
         text = "CON Choose deposit method:\n1. Mobile Money\n2. SACCO Wallet"
 
@@ -118,8 +193,8 @@ def handle_ussd_request(session_id, service_code, phone_number, text):
             else:
                 text = f"END Deposit failed: {transaction_status['message']}"
 
-    # Account Management options
-    elif text.startswith("1*3"):  # Account Management handling
+    # Account Management
+    elif text.startswith("1*3"):
         text = "CON Account Management:\n1. Update PIN\n2. View Account Details"
 
     elif text.startswith("3*"):
@@ -158,7 +233,7 @@ def handle_ussd_request(session_id, service_code, phone_number, text):
             else:
                 text = "END PINs do not match. Try again."
 
-    # Enquiries Menu
+    # Enquiries
     elif text == "1*5":
         text = "CON Choose an enquiry option:\n1. Mini Statement\n2. FAQs\n3. Help"
 
@@ -197,6 +272,7 @@ def handle_ussd_request(session_id, service_code, phone_number, text):
     # Help - Contact Support
     elif text == "1*5*3":
         text = "END Please contact customer support via 0720000000."
+
 
     resp = make_response(text, 200)
     resp.headers['Content-Type'] = "text/plain"
