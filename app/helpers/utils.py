@@ -1,7 +1,7 @@
 import logging
 import re
-from werkzeug.security import check_password_hash
-from flask import make_response, current_app
+from werkzeug.security import check_password_hash, generate_password_hash
+from flask import make_response
 from app import db
 from app.models import Tests, Withdrawals, Transactions
 
@@ -43,18 +43,15 @@ def validate_pin(pin):
 def register_user(phone_number, national_id, pin):
     """Register a new user and start a session."""
     phone_number = normalize_phone_number(phone_number)
-    
-    # Validate phone number
+
     if not validate_phone_number(phone_number):
         logging.warning(f"Invalid phone number: '{phone_number}'")
         return {"status": False, "message": "Invalid phone number.Please try again"}
 
-    # Validate national ID
     if not validate_national_id(national_id):
         logging.warning(f"Invalid national ID: '{national_id}'")
         return {"status": False, "message": "Invalid national ID.Please try again"}
 
-    # Validate pin
     if not validate_pin(pin):
         logging.warning(f"Invalid pin:'{pin}'")
         return {"status": False, "message": "Invalid pin.Please try again"}
@@ -76,7 +73,6 @@ def register_user(phone_number, national_id, pin):
         db.session.add(new_user)
         db.session.commit()
         logging.info(f"User registered successfully: phone_number='{mask_sensitive_info(phone_number)}'")
-
         return {"status": True, "message": "User registered successfully!"}
     except Exception as e:
         db.session.rollback()
@@ -117,16 +113,13 @@ def validate_withdrawal(user, amount, pin):
     if not user:
         return {"status": False, "message": "User not found."}
 
-    # Verify PIN
     if not verify_pin(user, pin):
         return {"status": False, "message": "Incorrect PIN."}
 
-    # Check if user has enough balance
     if user.balance < amount:
         return {"status": False, "message": "Insufficient funds."}
 
     return {"status": True}
-
 
 def update_balance(user, amount):
     """Update the user's balance after a successful withdrawal."""
@@ -140,12 +133,10 @@ def update_balance(user, amount):
         return {"status": False, "message": "Transaction failed."}
 
 def process_withdrawal(user, amount, pin, account_type, withdrawal_method, provider=None, phone_number=None):
-
-    # Validate Withdrawal
     validation = validate_withdrawal(user, amount, pin)
     if not validation["status"]:
         return validation
-    # Withdraw from Sacco Wallet
+
     if account_type == "sacco_wallet":
         if withdrawal_method == "savings":
             logging.info(f"Transferring {amount} from Sacco Wallet to Savings for user {mask_sensitive_info(user.phone_number)}")
@@ -155,7 +146,6 @@ def process_withdrawal(user, amount, pin, account_type, withdrawal_method, provi
                 return {"status": False, "message": "Invalid mobile money details."}
             logging.info(f"Withdrawing {amount} from Sacco Wallet to {provider} ({mask_sensitive_info(phone_number)})")
 
-    # Withdraw from Savings
     elif account_type == "savings":
         if withdrawal_method == "sacco_wallet":
             logging.info(f"Transferring {amount} from Savings to Sacco Wallet for user {mask_sensitive_info(user.phone_number)}")
@@ -168,36 +158,22 @@ def process_withdrawal(user, amount, pin, account_type, withdrawal_method, provi
     else:
         return {"status": False, "message": "Invalid account type."}
 
-    # Deduct from original account balance
     balance_update = update_balance(user, amount)
     if not balance_update["status"]:
         return balance_update
 
     return {"status": True, "message": "Withdrawal successful."}
 
-
 def process_deposit(phone_number, amount, source, destination):
-    """
-    Process deposit transactions.
-
-    :param phone_number: The phone number initiating the deposit.
-    :param amount: The amount to deposit.
-    :param source: The source of funds (Mobile Money or SACCO Wallet).
-    :param destination: The destination account (Savings or SACCO Wallet).
-    :return: Dictionary with transaction status and message.
-    """
     try:
-        # Validate amount
         amount = float(amount)
         if amount <= 0:
             return {"status": False, "message": "Invalid deposit amount."}
 
-        # Find the user
         user = Tests.query.filter_by(phone_number=phone_number).first()
         if not user:
             return {"status": False, "message": "User not found."}
 
-        # Process transaction
         new_transaction = Transactions(
             phone_number=phone_number,
             amount=amount,
@@ -216,3 +192,40 @@ def process_deposit(phone_number, amount, source, destination):
     except Exception as e:
         logging.error(f"Error processing deposit: {str(e)}")
         return {"status": False, "message": "An error occurred. Please try again."}
+
+def get_user_pin(phone_number):
+    """Retrieves the pin for a given user"""
+    user = Tests.query.filter_by(phone_number=phone_number).first()
+    if user:
+        return user.pin
+    return None
+
+def get_recent_transactions(phone_number, limit=5):
+    """Retrieves recent transactions for a given user"""
+    try:
+        transactions = Transactions.query.filter_by(phone_number=phone_number).order_by(Transactions.transaction_date.desc()).limit(limit).all()
+        transaction_list = []
+        for transaction in transactions:
+            transaction_list.append({
+                "date": transaction.transaction_date.strftime("%Y-%m-%d %H:%M:%S"),
+                "type": transaction.transaction_type,
+                "amount": transaction.amount,
+                "source": transaction.source,
+                "destination": transaction.destination
+            })
+        return transaction_list
+    except Exception as e:
+        logging.error(f"Error retrieving recent transactions: {str(e)}")
+        return None
+
+def change_user_pin(user, new_pin):
+    """Changes the user pin"""
+    try:
+        user.pin = generate_password_hash(new_pin)
+        db.session.commit()
+        return {"status": True, "message": "PIN changed successfully!"}
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Error changing user PIN: {str(e)}")
+        return {"status": False, "message": f"Error occurred: {str(e)}"}
+    
