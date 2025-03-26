@@ -228,4 +228,4 @@ def change_user_pin(user, new_pin):
         db.session.rollback()
         logging.error(f"Error changing user PIN: {str(e)}")
         return {"status": False, "message": f"Error occurred: {str(e)}"}
-    
+

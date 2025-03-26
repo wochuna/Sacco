@@ -32,14 +32,14 @@ MENU_MAP = {
         "0": "exit",
     },
     "withdrawals": {
-        "1": "wallet_to_savings",
-        "2": "wallet_to_mobile",
-        "3": "savings_to_wallet",
+        "1": "sacco_to_savings",
+        "2": "sacco_to_mobile",
+        "3": "savings_to_sacco",
         "4": "savings_to_mobile",
     },
-    "wallet_to_mobile": {
-        "1": "mpesa_wallet",
-        "2": "airtel_wallet",
+    "sacco_to_mobile": {
+        "1": "mpesa_sacco",
+        "2": "airtel_sacco",
     },
     "savings_to_mobile": {
         "1": "mpesa_savings",
@@ -47,15 +47,15 @@ MENU_MAP = {
     },
     "deposits": {
         "1": "mobile_money_deposit",
-        "2": "wallet_wallet_deposit",
+        "2": "sacco_wallet_deposit",
     },
     "mobile_money_deposit": {
-        "1": "mobile_to_wallet",
+        "1": "mobile_to_sacco",
         "2": "mobile_to_savings",
     },
-    "mobile_to_wallet": {
-        "1": "mpesa_to_wallet",
-        "2": "airtel_to_wallet",
+    "mobile_to_sacco": {
+        "1": "mpesa_to_sacco",
+        "2": "airtel_to_sacco",
     },
     "mobile_to_savings": {
         "1": "mpesa_to_savings",
@@ -135,142 +135,159 @@ def handle_registration(phone_number, choice, menu_stack):
         registration_message = register_user(phone_number, national_id, pin)
         return ussd_response(f"END {registration_message['message'] if 'message' in registration_message else registration_message}")
 
-def transition_to_menu(menu_name, choice, menu_map):
-    """Transitions to the next menu based on user choice."""
-    if choice in menu_map:
-        handle_ussd_request.current_menu = menu_map[choice]
-        logging.info(f"Transitioning to: {handle_ussd_request.current_menu}")
-        return True
-    return False
 
 def handle_menu_options(current_menu, choice, phone_number, menu_stack, session_id, service_code):
     """Handles menu options based on the current menu."""
-
     if current_menu == "logged_in":
-        if choice in MENU_MAP["logged_in"]:
-            next_menu = MENU_MAP["logged_in"][choice]
-            handle_ussd_request.current_menu = next_menu
-            logging.info(f"Transitioning to: {next_menu}")
-            menu_stack.append(current_menu)
+        if choice == "1":
+            handle_ussd_request.current_menu = "withdrawals"
+            text = "CON Withdrawal from:\n"
+            for key, value in MENU_MAP["withdrawals"].items():
+                text += f"{key}. {value.replace('_', ' ').title()} \n"
+            return ussd_response(text)
 
-            if next_menu == "withdrawals":
-                text = "CON Withdrawal from:\n"
-                for key, value in MENU_MAP["withdrawals"].items():
-                    text += f"{key}. {value.replace('_', ' ').title()} \n"
-                return ussd_response(text)
-            elif handle_ussd_request.current_menu == "deposits":
-                text = "CON Choose deposit from:\n"
-                for key, value in MENU_MAP["deposits"].items():
-                    text += f"{key}. {value.replace('_', ' ').title()} \n"
-                return ussd_response(text)
-            elif handle_ussd_request.current_menu == "account_management":
-                text = "CON Account Management:\n"
-                for key, value in MENU_MAP["account_management"].items():
-                    text += f"{key}. {value.replace('_', ' ').title()} \n"
-                return ussd_response(text)
-            elif handle_ussd_request.current_menu == "loans":
-                text = "CON Choose an option for Loans:\n"
-                for key, value in MENU_MAP["loans"].items():
-                    text += f"{key}. {value.replace('_', ' ').title()} \n"
-                return ussd_response(text)
-            elif handle_ussd_request.current_menu == "enquiries":
-                text = "CON Choose an enquiry option:\n"
-                for key, value in MENU_MAP["enquiries"].items():
-                    text += f"{key}. {value.replace('_', ' ').title()} \n"
-                return ussd_response(text)
+        elif choice == "2":
+            handle_ussd_request.current_menu = "deposits"
+            text = "CON Choose deposit from:\n"
+            for key, value in MENU_MAP["deposits"].items():
+                text += f"{key}. {value.replace('_', ' ').title()} \n"
+            return ussd_response(text)
+
+        elif choice == "3":
+            handle_ussd_request.current_menu = "account_management"
+            text = "CON Account Management:\n"
+            for key, value in MENU_MAP["account_management"].items():
+                text += f"{key}. {value.replace('_', ' ').title()} \n"
+            return ussd_response(text)
+
+        elif choice == "4":
+            handle_ussd_request.current_menu = "loans"
+            text = "CON Choose an option for Loans:\n"
+            for key, value in MENU_MAP["loans"].items():
+                text += f"{key}. {value.replace('_', ' ').title()} \n"
+            return ussd_response(text)
+
+        elif choice == "5":
+            handle_ussd_request.current_menu = "enquiries"
+            text = "CON Choose an enquiry option:\n"
+            for key, value in MENU_MAP["enquiries"].items():
+                text += f"{key}. {value.replace('_', ' ').title()} \n"
+            return ussd_response(text)
+
         elif choice == "0":
             return ussd_response("END Thank you for using our SACCO service!")
         else:
             return ussd_response("END Invalid choice.")
 
-    elif current_menu in ["withdrawals", "deposits", "account_management", "loans", "enquiries", "faqs", "wallet_to_mobile", "savings_to_mobile", "mobile_money_deposit", "mobile_to_wallet", "mobile_to_savings"]:
-        if transition_to_menu(current_menu, choice, MENU_MAP[current_menu]):
-            if handle_ussd_request.current_menu == "wallet_to_mobile":
-                text = "CON Choose Mobile Money Provider:\n"
-                for key,value in MENU_MAP["wallet_to_mobile"].items():
-                    text += f"{key}. {value.replace('_', ' ').title()} \n"
-                return ussd_response(text)
-            elif handle_ussd_request.current_menu == "savings_to_mobile":
-                text = "CON Choose Mobile Money Provider:\n"
-                for key, value in MENU_MAP["savings_to_mobile"].items():
-                    text += f"{key}. {value.replace('_', ' ').title()} \n"
-                return ussd_response(text)
-            elif handle_ussd_request.current_menu in ["mpesa_wallet", "airtel_wallet", "mpesa_savings", "airtel_savings", "mpesa_to_wallet", "airtel_to_wallet", "mpesa_to_savings", "airtel_to_savings"]:
-                return ussd_response("CON Enter your mobile number:")
-            elif handle_ussd_request.current_menu in ["wallet_to_savings", "savings_to_wallet", "wallet_wallet_deposit"]:
-                return ussd_response("CON Enter amount to withdraw:")
-            elif handle_ussd_request.current_menu == "mobile_money_deposit":
-                text = "CON Choose deposit destination:\n"
-                for key, value in MENU_MAP["mobile_money_deposit"].items():
-                    text += f"{key}. {value.replace('_', ' ').title()} \n"
-                return ussd_response(text)
-            elif handle_ussd_request.current_menu == "mobile_to_wallet":
-                text = "CON Choose Mobile Money Provider:\n"
-                for key, value in MENU_MAP["mobile_to_wallet"].items():
-                    text += f"{key}. {value.replace('_', ' ').title()} \n"
-                return ussd_response(text)
-            elif handle_ussd_request.current_menu == "mobile_to_savings":
-                text = "CON Choose Mobile Money Provider:\n"
-                for key, value in MENU_MAP["mobile_to_savings"].items():
-                    text += f"{key}. {value.replace('_', ' ').title()} \n"
-                return ussd_response(text)
-            elif handle_ussd_request.current_menu == "update_pin":
-                return ussd_response("CON Enter your current PIN:")
-            elif handle_ussd_request.current_menu == "view_account_details":
-                return ussd_response("CON Enter your PIN to view account details:")
-            elif handle_ussd_request.current_menu == "mini_statement":
-                return ussd_response("CON Enter your PIN to access Mini Statement:")
-            elif handle_ussd_request.current_menu == "faqs":
-                text = "CON FAQs:\n"
-                for key, value in MENU_MAP["faqs"].items():
-                    text += f"{key}. {value.replace('_', ' ').title()} \n"
-                return ussd_response(text)
-            else:
-                if current_menu == "withdrawals":
-                    text = "CON Withdrawal from:\n"
-                    for key, value in MENU_MAP["withdrawals"].items():
-                        text += f"{key}. {value.replace('_', ' ').title()} \n"
-                    return ussd_response(text)
-                elif current_menu == "deposits":
-                    text = "CON Choose deposit from:\n"
-                    for key, value in MENU_MAP["deposits"].items():
-                        text += f"{key}. {value.replace('_', ' ').title()} \n"
-                    return ussd_response(text)
-                elif current_menu == "account_management":
-                    text = "CON Account Management:\n"
-                    for key, value in MENU_MAP["account_management"].items():
-                        text += f"{key}. {value.replace('_', ' ').title()} \n"
-                    return ussd_response(text)
-                elif current_menu == "loans":
-                    text = "CON Choose an option for Loans:\n"
-                    for key, value in MENU_MAP["loans"].items():
-                        text += f"{key}. {value.replace('_', ' ').title()} \n"
-                    return ussd_response(text)
-                elif current_menu == "enquiries":
-                    text = "CON Choose an enquiry option:\n"
-                    for key, value in MENU_MAP["enquiries"].items():
-                        text += f"{key}. {value.replace('_', ' ').title()} \n"
-                    return ussd_response(text)
 
-    elif current_menu == "wallet_to_savings":
+    elif current_menu == "withdrawals":
+        text = "CON Withdrawal from:\n"
+        for key, value in MENU_MAP["withdrawals"].items():
+            text += f"{key}. {value.replace('_', ' ').title()} \n"
+        return ussd_response(text)
+    elif current_menu == "sacco_to_savings":
+        return ussd_response("CON Enter amount to withdraw:")
+    elif current_menu == "sacco_to_mobile":
+        text = "CON Choose Mobile Money Provider:\n"
+        for key, value in MENU_MAP["sacco_to_mobile"].items():
+            text += f"{key}. {value.replace('_', ' ').title()} \n"
+        return ussd_response(text)
+    elif current_menu in ["mpesa_sacco", "airtel_sacco"]:
+        return ussd_response("CON Enter your mobile number:")
+    elif current_menu =="savings_to_sacco":
+        return ussd_response("CON Enter amount to withdraw:")
+    elif current_menu == "savings_to_mobile":
+        text = "CON Choose Mobile Money Provider:\n"
+        for key, value in MENU_MAP["savings_to_mobile"].items():
+            text += f"{key}. {value.replace('_', ' ').title()} \n"
+        return ussd_response(text)
+    elif current_menu in ["mpesa_savings", "airtel_savings"]:
+        return ussd_response("CON Enter your mobile number:")
+
+
+    elif current_menu == "deposits":
+        text = "CON Choose deposit from:\n"
+        for key, value in MENU_MAP["deposits"].items():
+            text += f"{key}. {value.replace('_', ' ').title()} \n"
+        return ussd_response(text)
+    elif current_menu == "mobile_money_deposit":
+        text = "CON Choose deposit destination:\n"
+        for key, value in MENU_MAP["mobile_money_deposit"].items():
+            text += f"{key}. {value.replace('_', ' ').title()} \n"
+        return ussd_response(text)
+    elif current_menu == "mobile_to_sacco":
+        text = "CON Choose Mobile Money Provider:\n"
+        for key, value in MENU_MAP["mobile_to_sacco"].items():
+            text += f"{key}. {value.replace('_', ' ').title()} \n"
+        return ussd_response(text)
+    elif current_menu in ["mpesa_to_sacco", "airtel_to_sacco"]:
+        return ussd_response("CON Enter your mobile number:")
+    elif current_menu == "mobile_to_savings":
+        text = "CON Choose Mobile Money Provider:\n"
+        for key, value in MENU_MAP["mobile_to_savings"].items():
+            text += f"{key}. {value.replace('_', ' ').title()} \n"
+        return ussd_response(text)
+    elif current_menu in ["mpesa_to_savings", "airtel_to_savings"]:
+        return ussd_response("CON Enter your mobile number:")
+    elif current_menu == "sacco_wallet_deposit":
+        return ussd_response("CON Enter amount to deposit:")
+
+
+    elif current_menu == "account_management":
+        text = "CON Account Management:\n"
+        for key, value in MENU_MAP["account_management"].items():
+            text += f"{key}. {value.replace('_', ' ').title()} \n"
+        return ussd_response(text)
+    elif current_menu == "update_pin":
+        return ussd_response("CON Enter your current PIN:")
+    elif current_menu == "view_account_details":
+        return ussd_response("CON Enter your PIN to view account details:")
+    elif current_menu == "loans":
+        text = "CON Choose an option for Loans:\n"
+        for key, value in MENU_MAP["loans"].items():
+            text += f"{key}. {value.replace('_', ' ').title()} \n"
+        return ussd_response(text)
+
+
+    elif current_menu == "enquiries":
+        text = "CON Choose an enquiry option:\n"
+        for key, value in MENU_MAP["enquiries"].items():
+            text += f"{key}. {value.replace('_', ' ').title()} \n"
+        return ussd_response(text)
+
+
+    elif current_menu == "faqs":
+        text = "CON FAQs:\n"
+        for key, value in MENU_MAP["faqs"].items():
+            text += f"{key}. {value.replace('_', ' ').title()} \n"
+        return ussd_response(text)
+
+
+    elif current_menu == "exit":
+        return ussd_response("END Thank you for using our SACCO service!")
+    elif current_menu == "enter_phone":
+        return ussd_response("CON Please enter your National ID number:")
+    elif current_menu == "enter_national_id":
+        return ussd_response("CON Please enter your PIN:")
+    elif current_menu == "sacco_to_savings":
         amount = choice
         pin = menu_stack[-2]
         registered_user = Tests.query.filter_by(phone_number=phone_number).first()
         if registered_user and verify_pin(registered_user, pin):
-            withdrawal_result = process_withdrawal(registered_user, float(amount), pin, "savings", "wallet_wallet")
+            withdrawal_result = process_withdrawal(registered_user, float(amount), pin, "savings", "sacco_wallet")
             return ussd_response(f"END {withdrawal_result['message']}")
         else:
             return ussd_response("END Invalid PIN. Please try again.")
-    elif current_menu in ["mpesa_wallet", "airtel_wallet"]:
+    elif current_menu in ["mpesa_sacco", "airtel_sacco"]:
         mobile_number = choice
         menu_stack.append(mobile_number)
         return ussd_response("CON Enter amount to withdraw:")
-    elif current_menu == "savings_to_wallet":
+    elif current_menu == "savings_to_sacco":
         amount = choice
         pin = menu_stack[-2]
         registered_user = Tests.query.filter_by(phone_number=phone_number).first()
         if registered_user and verify_pin(registered_user, pin):
-            withdrawal_result = process_withdrawal(registered_user, float(amount), pin, "wallet_wallet", "savings")
+            withdrawal_result = process_withdrawal(registered_user, float(amount), pin, "sacco_wallet", "savings")
             return ussd_response(f"END {withdrawal_result['message']}")
         else:
             return ussd_response("END Invalid PIN. Please try again.")
@@ -278,11 +295,11 @@ def handle_menu_options(current_menu, choice, phone_number, menu_stack, session_
         mobile_number = choice
         menu_stack.append(mobile_number)
         return ussd_response("CON Enter amount to withdraw:")
-    elif current_menu == "wallet_wallet_deposit":
+    elif current_menu == "sacco_wallet_deposit":
         amount = choice
-        deposit_result = process_deposit(phone_number, amount, "wallet Wallet", "wallet Wallet")
+        deposit_result = process_deposit(phone_number, amount, "SACCO Wallet", "SACCO Wallet")
         return ussd_response(f"END {deposit_result['message']}")
-    elif current_menu in ["mpesa_to_wallet", "airtel_to_wallet"]:
+    elif current_menu in ["mpesa_to_sacco", "airtel_to_sacco"]:
         mobile_number = choice
         menu_stack.append(mobile_number)
         return ussd_response("CON Enter deposit amount:")
@@ -290,11 +307,11 @@ def handle_menu_options(current_menu, choice, phone_number, menu_stack, session_
         mobile_number = choice
         menu_stack.append(mobile_number)
         return ussd_response("CON Enter deposit amount:")
-    elif current_menu == "mobile_money_deposit" and menu_stack[-1] == "mobile_to_wallet":
+    elif current_menu == "mobile_money_deposit" and menu_stack[-1] == "mobile_to_sacco":
         amount = choice
         mobile_number = menu_stack[-2]
-        provider = "M-Pesa" if "mpesa_to_wallet" in menu_stack else "Airtel Money"
-        deposit_result = process_deposit(phone_number, amount, provider, "wallet Wallet")
+        provider = "M-Pesa" if "mpesa_to_sacco" in menu_stack else "Airtel Money"
+        deposit_result = process_deposit(phone_number, amount, provider, "SACCO Wallet")
         return ussd_response(f"END {deposit_result['message']}")
     elif current_menu == "mobile_money_deposit" and menu_stack[-1] == "mobile_to_savings":
         amount = choice
@@ -302,6 +319,7 @@ def handle_menu_options(current_menu, choice, phone_number, menu_stack, session_
         provider = "M-Pesa" if "mpesa_to_savings" in menu_stack else "Airtel Money"
         deposit_result = process_deposit(phone_number, amount, provider, "Savings")
         return ussd_response(f"END {deposit_result['message']}")
+
 
     elif current_menu == "update_pin":
         current_pin = choice
@@ -373,6 +391,7 @@ def handle_menu_options(current_menu, choice, phone_number, menu_stack, session_
     else:
         return None
 
+
 def handle_ussd_request(session_id, service_code, phone_number, text):
     """Process USSD requests using a menu map."""
     phone_number = normalize_phone_number(phone_number)
@@ -406,11 +425,10 @@ def handle_ussd_request(session_id, service_code, phone_number, text):
             if len(parts) > 0 and parts[-1].isdigit():
                 text = parts[-1]
                 logging.info(f"Emulator fix: Extracted menu selection: {text}")
-                handle_menu_options(handle_ussd_request.current_menu, text, phone_number, handle_ussd_request.menu_stack, session_id, service_code)
-                return handle_ussd_request(session_id, service_code, phone_number, "")
             else:
                 logging.warning(f"Emulator fix: Invalid concatenated input: {text}")
                 return ussd_response("END Invalid choice. Please enter a valid option number.")
+
 
     if handle_ussd_request.current_menu == "logged_in" and not text.isdigit():
         logging.warning(f"Unexpected input format in logged_in menu: {text}")
