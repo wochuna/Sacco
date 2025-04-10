@@ -30,55 +30,67 @@ MENU_MAP = {
         "4": "loans",
         "5": "enquiries",
         "0": "exit",
+        "#": "main",  # Back to main menu
     },
     "withdrawals": {
         "1": "sacco_to_savings",
         "2": "sacco_to_mobile",
         "3": "savings_to_sacco",
         "4": "savings_to_mobile",
+        "#": "logged_in",  # Back 
     },
     "sacco_to_mobile": {
         "1": "mpesa_sacco",
         "2": "airtel_sacco",
+        "#": "withdrawals",  # Back 
     },
     "savings_to_mobile": {
         "1": "mpesa_savings",
         "2": "airtel_savings",
+        "#": "withdrawals",  # Back 
     },
     "deposits": {
         "1": "mobile_money_deposit",
         "2": "sacco_wallet_deposit",
+        "#": "logged_in",  # Back 
     },
     "mobile_money_deposit": {
         "1": "mobile_to_sacco",
         "2": "mobile_to_savings",
+        "#": "deposits",  # Back
     },
     "mobile_to_sacco": {
         "1": "mpesa_to_sacco",
         "2": "airtel_to_sacco",
+        "#": "mobile_money_deposit",  # Back 
     },
     "mobile_to_savings": {
         "1": "mpesa_to_savings",
         "2": "airtel_to_savings",
+        "#": "mobile_money_deposit",  # Back 
     },
     "account_management": {
         "1": "update_pin",
         "2": "view_account_details",
+        "#": "logged_in",  # Back 
     },
     "loans": {
         "1": "apply_loan",
         "2": "loan_status",
+        "#": "logged_in",  # Back 
     },
     "enquiries": {
         "1": "mini_statement",
         "2": "faqs",
         "3": "help",
+        "#": "logged_in",  # Back 
     },
     "faqs": {
         "1": "faq_balance",
         "2": "faq_loan",
         "3": "faq_pin",
         "4": "faq_support",
+        "#": "enquiries",  # Back 
     },
     "register": {
         "phone": "enter_phone",
@@ -87,8 +99,76 @@ MENU_MAP = {
     },
 }
 
-def handle_login(phone_number, choice, menu_stack, session_id, service_code):
-    """Handles the login process."""
+# map menus that require input processing 
+INPUT_PROCESSING_MENUS = {
+    "sacco_to_savings": "process_sacco_to_savings",
+    "savings_to_sacco": "process_savings_to_sacco",
+    "sacco_wallet_deposit": "process_sacco_wallet_deposit",
+    "mpesa_sacco": "process_mobile_number",
+    "airtel_sacco": "process_mobile_number",
+    "mpesa_savings": "process_mobile_number",
+    "airtel_savings": "process_mobile_number",
+    "mpesa_to_sacco": "process_mobile_number",
+    "airtel_to_sacco": "process_mobile_number", 
+    "mpesa_to_savings": "process_mobile_number",
+    "airtel_to_savings": "process_mobile_number",
+    "update_pin": "process_current_pin",
+    "new_pin": "process_new_pin",
+    "confirm_new_pin": "process_confirm_pin",
+    "view_account_details": "process_view_details",
+    "mini_statement": "process_mini_statement",
+}
+
+# parent menu mapping 
+PARENT_MENUS = {
+    "withdrawals": "logged_in",
+    "deposits": "logged_in",
+    "account_management": "logged_in",
+    "loans": "logged_in",
+    "enquiries": "logged_in",
+    "sacco_to_mobile": "withdrawals",
+    "savings_to_mobile": "withdrawals",
+    "mobile_money_deposit": "deposits",
+    "mobile_to_sacco": "mobile_money_deposit",
+    "mobile_to_savings": "mobile_money_deposit",
+    "faqs": "enquiries",
+}
+
+# menu text templates 
+MENU_TEXT = {
+    "main": "CON Welcome to our SACCO \n1. Login \n2. Register",
+    "logged_in": "CON Choose an option: \n1. Withdrawals \n2. Deposits \n3. Account Management \n4. Loans \n5. Enquiries \n0. Exit \n#. Back to Main",
+    "withdrawals": "CON Withdrawal from:\n1. Sacco To Savings \n2. Sacco To Mobile \n3. Savings To Sacco \n4. Savings To Mobile \n#. Back",
+    "sacco_to_mobile": "CON Choose Mobile Money Provider:\n1. Mpesa Sacco \n2. Airtel Sacco \n#. Back",
+    "savings_to_mobile": "CON Choose Mobile Money Provider:\n1. Mpesa Savings \n2. Airtel Savings \n#. Back",
+    "deposits": "CON Choose deposit from:\n1. Mobile Money Deposit \n2. Sacco Wallet Deposit \n#. Back",
+    "mobile_money_deposit": "CON Choose deposit destination:\n1. Mobile To Sacco \n2. Mobile To Savings \n#. Back",
+    "mobile_to_sacco": "CON Choose Mobile Money Provider:\n1. Mpesa To Sacco \n2. Airtel To Sacco \n#. Back",
+    "mobile_to_savings": "CON Choose Mobile Money Provider:\n1. Mpesa To Savings \n2. Airtel To Savings \n#. Back",
+    "account_management": "CON Account Management:\n1. Update Pin \n2. View Account Details \n#. Back",
+    "loans": "CON Choose an option for Loans:\n1. Apply Loan \n2. Loan Status \n#. Back",
+    "enquiries": "CON Choose an enquiry option:\n1. Mini Statement \n2. Faqs \n3. Help \n#. Back",
+    "faqs": "CON FAQs:\n1. Faq Balance \n2. Faq Loan \n3. Faq Pin \n4. Faq Support \n#. Back",
+}
+
+# store sessions with navigation history 
+sessions = {}
+
+def get_menu_text(menu_name):
+    """return the predefined menu text or generate it dynamically if not found"""
+    if menu_name in MENU_TEXT:
+        return MENU_TEXT[menu_name]
+    else:
+        # generate menu text dynamically if not in predefined templates
+        if menu_name in MENU_MAP:
+            text = f"CON {menu_name.replace('_', ' ').title()}:\n"
+            for key, value in MENU_MAP[menu_name].items():
+                text += f"{key}. {value.replace('_', ' ').title()} \n"
+            return text
+        return f"CON {menu_name.replace('_', ' ').title()}"
+
+def handle_login(phone_number, choice, session_data, session_id, service_code):
+    """handles the login process."""
     if "*" in choice:
         parts = choice.split("*")
         if len(parts) == 2:
@@ -96,247 +176,167 @@ def handle_login(phone_number, choice, menu_stack, session_id, service_code):
         else:
             return ussd_response("END Invalid input.")
     else:
-        return ussd_response("END Invalid input.")
+        pin = choice
 
     registered_user = Tests.query.filter_by(phone_number=phone_number).first()
     if registered_user and verify_pin(registered_user, pin):
-        handle_ussd_request.current_menu = "logged_in"
-        menu_stack.append("login")
-        text = "CON Login successful! Choose an option: \n"
-        for key, value in MENU_MAP["logged_in"].items():
-            text += f"{key}. {value.replace('_', ' ').title()} \n"
-        return ussd_response(text)
+        session_data["current_menu"] = "logged_in"
+        session_data["menu_stack"].append("login")
+        session_data["logged_in"] = True
+        session_data["user_id"] = registered_user.id
+        return ussd_response(get_menu_text("logged_in"))
     else:
         return ussd_response("END Invalid PIN. Please try again.")
 
-def handle_registration(phone_number, choice, menu_stack):
-    """Handles the registration process."""
-    if handle_ussd_request.current_menu == "register" and "phone" in MENU_MAP["register"]:
-        menu_stack.append("register")
-        handle_ussd_request.current_menu = "enter_national_id"
+def handle_registration(phone_number, choice, session_data):
+    """handles the registration process."""
+    if session_data["current_menu"] == "register" and "phone" in MENU_MAP["register"]:
+        session_data["menu_stack"].append("register")
+        session_data["current_menu"] = "enter_national_id"
         if validate_phone_number(choice):
-            menu_stack.append(choice)
+            session_data["menu_stack"].append(choice)
             return ussd_response("CON Please enter your National ID number:")
         else:
             return ussd_response("END Invalid phone number")
 
-    elif handle_ussd_request.current_menu == "enter_national_id":
-        menu_stack.append("enter_national_id")
+    elif session_data["current_menu"] == "enter_national_id":
+        session_data["menu_stack"].append("enter_national_id")
         if validate_national_id(choice):
-            menu_stack.append(choice)
-            handle_ussd_request.current_menu = "enter_pin_register"
+            session_data["menu_stack"].append(choice)
+            session_data["current_menu"] = "enter_pin_register"
             return ussd_response("CON Please enter your PIN:")
         else:
             return ussd_response("END Invalid national ID")
 
-    elif handle_ussd_request.current_menu == "enter_pin_register":
-        national_id = menu_stack[-2]
+    elif session_data["current_menu"] == "enter_pin_register":
+        national_id = session_data["menu_stack"][-2]
         pin = choice
         registration_message = register_user(phone_number, national_id, pin)
         return ussd_response(f"END {registration_message['message'] if 'message' in registration_message else registration_message}")
 
-
-def handle_menu_options(current_menu, choice, phone_number, menu_stack, session_id, service_code):
-    """Handles menu options based on the current menu."""
-    if current_menu == "logged_in":
-        if choice == "1":
-            handle_ussd_request.current_menu = "withdrawals"
-            text = "CON Withdrawal from:\n"
-            for key, value in MENU_MAP["withdrawals"].items():
-                text += f"{key}. {value.replace('_', ' ').title()} \n"
-            return ussd_response(text)
-
-        elif choice == "2":
-            handle_ussd_request.current_menu = "deposits"
-            text = "CON Choose deposit from:\n"
-            for key, value in MENU_MAP["deposits"].items():
-                text += f"{key}. {value.replace('_', ' ').title()} \n"
-            return ussd_response(text)
-
-        elif choice == "3":
-            handle_ussd_request.current_menu = "account_management"
-            text = "CON Account Management:\n"
-            for key, value in MENU_MAP["account_management"].items():
-                text += f"{key}. {value.replace('_', ' ').title()} \n"
-            return ussd_response(text)
-
-        elif choice == "4":
-            handle_ussd_request.current_menu = "loans"
-            text = "CON Choose an option for Loans:\n"
-            for key, value in MENU_MAP["loans"].items():
-                text += f"{key}. {value.replace('_', ' ').title()} \n"
-            return ussd_response(text)
-
-        elif choice == "5":
-            handle_ussd_request.current_menu = "enquiries"
-            text = "CON Choose an enquiry option:\n"
-            for key, value in MENU_MAP["enquiries"].items():
-                text += f"{key}. {value.replace('_', ' ').title()} \n"
-            return ussd_response(text)
-
-        elif choice == "0":
-            return ussd_response("END Thank you for using our SACCO service!")
-        else:
-            return ussd_response("END Invalid choice.")
-
-
-    elif current_menu == "withdrawals":
-        text = "CON Withdrawal from:\n"
-        for key, value in MENU_MAP["withdrawals"].items():
-            text += f"{key}. {value.replace('_', ' ').title()} \n"
-        return ussd_response(text)
-    elif current_menu == "sacco_to_savings":
-        return ussd_response("CON Enter amount to withdraw:")
-    elif current_menu == "sacco_to_mobile":
-        text = "CON Choose Mobile Money Provider:\n"
-        for key, value in MENU_MAP["sacco_to_mobile"].items():
-            text += f"{key}. {value.replace('_', ' ').title()} \n"
-        return ussd_response(text)
-    elif current_menu in ["mpesa_sacco", "airtel_sacco"]:
-        return ussd_response("CON Enter your mobile number:")
-    elif current_menu =="savings_to_sacco":
-        return ussd_response("CON Enter amount to withdraw:")
-    elif current_menu == "savings_to_mobile":
-        text = "CON Choose Mobile Money Provider:\n"
-        for key, value in MENU_MAP["savings_to_mobile"].items():
-            text += f"{key}. {value.replace('_', ' ').title()} \n"
-        return ussd_response(text)
-    elif current_menu in ["mpesa_savings", "airtel_savings"]:
-        return ussd_response("CON Enter your mobile number:")
-
-
-    elif current_menu == "deposits":
-        text = "CON Choose deposit from:\n"
-        for key, value in MENU_MAP["deposits"].items():
-            text += f"{key}. {value.replace('_', ' ').title()} \n"
-        return ussd_response(text)
-    elif current_menu == "mobile_money_deposit":
-        text = "CON Choose deposit destination:\n"
-        for key, value in MENU_MAP["mobile_money_deposit"].items():
-            text += f"{key}. {value.replace('_', ' ').title()} \n"
-        return ussd_response(text)
-    elif current_menu == "mobile_to_sacco":
-        text = "CON Choose Mobile Money Provider:\n"
-        for key, value in MENU_MAP["mobile_to_sacco"].items():
-            text += f"{key}. {value.replace('_', ' ').title()} \n"
-        return ussd_response(text)
-    elif current_menu in ["mpesa_to_sacco", "airtel_to_sacco"]:
-        return ussd_response("CON Enter your mobile number:")
-    elif current_menu == "mobile_to_savings":
-        text = "CON Choose Mobile Money Provider:\n"
-        for key, value in MENU_MAP["mobile_to_savings"].items():
-            text += f"{key}. {value.replace('_', ' ').title()} \n"
-        return ussd_response(text)
-    elif current_menu in ["mpesa_to_savings", "airtel_to_savings"]:
-        return ussd_response("CON Enter your mobile number:")
-    elif current_menu == "sacco_wallet_deposit":
-        return ussd_response("CON Enter amount to deposit:")
-
-
-    elif current_menu == "account_management":
-        text = "CON Account Management:\n"
-        for key, value in MENU_MAP["account_management"].items():
-            text += f"{key}. {value.replace('_', ' ').title()} \n"
-        return ussd_response(text)
-    elif current_menu == "update_pin":
-        return ussd_response("CON Enter your current PIN:")
-    elif current_menu == "view_account_details":
-        return ussd_response("CON Enter your PIN to view account details:")
-    elif current_menu == "loans":
-        text = "CON Choose an option for Loans:\n"
-        for key, value in MENU_MAP["loans"].items():
-            text += f"{key}. {value.replace('_', ' ').title()} \n"
-        return ussd_response(text)
-
-
-    elif current_menu == "enquiries":
-        text = "CON Choose an enquiry option:\n"
-        for key, value in MENU_MAP["enquiries"].items():
-            text += f"{key}. {value.replace('_', ' ').title()} \n"
-        return ussd_response(text)
-
-
-    elif current_menu == "faqs":
-        text = "CON FAQs:\n"
-        for key, value in MENU_MAP["faqs"].items():
-            text += f"{key}. {value.replace('_', ' ').title()} \n"
-        return ussd_response(text)
-
-
-    elif current_menu == "exit":
-        return ussd_response("END Thank you for using our SACCO service!")
-    elif current_menu == "enter_phone":
-        return ussd_response("CON Please enter your National ID number:")
-    elif current_menu == "enter_national_id":
-        return ussd_response("CON Please enter your PIN:")
-    elif current_menu == "sacco_to_savings":
+def process_input(phone_number, menu_type, choice, session_data):
+    """process input for specific menu types"""
+    menu_stack = session_data["menu_stack"]
+    
+    # handle withdrawal from sacco to savings
+    if menu_type == "process_sacco_to_savings":
         amount = choice
-        pin = menu_stack[-2]
+        session_data["temp_amount"] = amount
+        session_data["temp_action"] = "sacco_to_savings"
+        session_data["current_menu"] = "enter_pin_for_transaction"
+        return ussd_response("CON Enter your PIN to confirm withdrawal:")
+    
+    # handle withdrawal from savings to sacco
+    elif menu_type == "process_savings_to_sacco":
+        amount = choice
+        session_data["temp_amount"] = amount
+        session_data["temp_action"] = "savings_to_sacco"
+        session_data["current_menu"] = "enter_pin_for_transaction"
+        return ussd_response("CON Enter your PIN to confirm withdrawal:")
+    
+    # handle PIN entry for transactions
+    elif session_data["current_menu"] == "enter_pin_for_transaction":
+        pin = choice
+        session_data["pin"] = pin
         registered_user = Tests.query.filter_by(phone_number=phone_number).first()
+        
         if registered_user and verify_pin(registered_user, pin):
-            withdrawal_result = process_withdrawal(registered_user, float(amount), pin, "savings", "sacco_wallet")
-            return ussd_response(f"END {withdrawal_result['message']}")
+            action = session_data.get("temp_action", "")
+            amount = session_data.get("temp_amount", "0")
+            
+            if action == "sacco_to_savings":
+                withdrawal_result = process_withdrawal(registered_user, float(amount), pin, "savings", "sacco_wallet")
+                return ussd_response(f"END {withdrawal_result['message']}")
+            elif action == "savings_to_sacco":
+                withdrawal_result = process_withdrawal(registered_user, float(amount), pin, "sacco_wallet", "savings")
+                return ussd_response(f"END {withdrawal_result['message']}")
+            else:
+                return ussd_response("END Unknown transaction type.")
         else:
             return ussd_response("END Invalid PIN. Please try again.")
-    elif current_menu in ["mpesa_sacco", "airtel_sacco"]:
+    
+    # process mobile number input for various mobile money services
+    elif menu_type == "process_mobile_number":
         mobile_number = choice
-        menu_stack.append(mobile_number)
-        return ussd_response("CON Enter amount to withdraw:")
-    elif current_menu == "savings_to_sacco":
-        amount = choice
-        pin = menu_stack[-2]
-        registered_user = Tests.query.filter_by(phone_number=phone_number).first()
-        if registered_user and verify_pin(registered_user, pin):
-            withdrawal_result = process_withdrawal(registered_user, float(amount), pin, "sacco_wallet", "savings")
-            return ussd_response(f"END {withdrawal_result['message']}")
+        current_menu = session_data["current_menu"]
+        session_data["temp_mobile"] = mobile_number
+        
+        # store original menu for later reference
+        session_data["last_menu"] = current_menu
+        
+        # set next menu based on the current
+        if current_menu in ["mpesa_sacco", "airtel_sacco", "mpesa_savings", "airtel_savings"]:
+            return ussd_response("CON Enter amount to withdraw:")
+        elif current_menu in ["mpesa_to_sacco", "airtel_to_sacco", "mpesa_to_savings", "airtel_to_savings"]:
+            return ussd_response("CON Enter deposit amount:")
         else:
-            return ussd_response("END Invalid PIN. Please try again.")
-    elif current_menu in ["mpesa_savings", "airtel_savings"]:
-        mobile_number = choice
-        menu_stack.append(mobile_number)
-        return ussd_response("CON Enter amount to withdraw:")
-    elif current_menu == "sacco_wallet_deposit":
+            return ussd_response("END Invalid menu state.")
+    
+    # handle direct sacco wallet deposit
+    elif menu_type == "process_sacco_wallet_deposit":
         amount = choice
         deposit_result = process_deposit(phone_number, amount, "SACCO Wallet", "SACCO Wallet")
         return ussd_response(f"END {deposit_result['message']}")
-    elif current_menu in ["mpesa_to_sacco", "airtel_to_sacco"]:
-        mobile_number = choice
-        menu_stack.append(mobile_number)
-        return ussd_response("CON Enter deposit amount:")
-    elif current_menu in ["mpesa_to_savings", "airtel_to_savings"]:
-        mobile_number = choice
-        menu_stack.append(mobile_number)
-        return ussd_response("CON Enter deposit amount:")
-    elif current_menu == "mobile_money_deposit" and menu_stack[-1] == "mobile_to_sacco":
-        amount = choice
-        mobile_number = menu_stack[-2]
-        provider = "M-Pesa" if "mpesa_to_sacco" in menu_stack else "Airtel Money"
-        deposit_result = process_deposit(phone_number, amount, provider, "SACCO Wallet")
-        return ussd_response(f"END {deposit_result['message']}")
-    elif current_menu == "mobile_money_deposit" and menu_stack[-1] == "mobile_to_savings":
-        amount = choice
-        mobile_number = menu_stack[-2]
-        provider = "M-Pesa" if "mpesa_to_savings" in menu_stack else "Airtel Money"
-        deposit_result = process_deposit(phone_number, amount, provider, "Savings")
-        return ussd_response(f"END {deposit_result['message']}")
 
-
-    elif current_menu == "update_pin":
+    # process amount input after mobile number was provided
+    elif session_data.get("temp_mobile") and session_data.get("last_menu"):
+        amount = choice
+        mobile_number = session_data.get("temp_mobile")
+        last_menu = session_data.get("last_menu")
+        
+        # handle withdrawal to mobile money
+        if last_menu in ["mpesa_sacco", "airtel_sacco"]:
+            # Determine provider
+            provider = "M-Pesa" if "mpesa" in last_menu else "Airtel Money"
+            # get PIN or ask for PIN
+            session_data["temp_amount"] = amount
+            session_data["temp_provider"] = provider
+            session_data["temp_action"] = "sacco_to_mobile"
+            session_data["current_menu"] = "enter_pin_for_transaction"
+            return ussd_response("CON Enter your PIN to confirm withdrawal:")
+            
+        # handle withdrawal to mobile money from savings
+        elif last_menu in ["mpesa_savings", "airtel_savings"]:
+            provider = "M-Pesa" if "mpesa" in last_menu else "Airtel Money"
+            session_data["temp_amount"] = amount
+            session_data["temp_provider"] = provider
+            session_data["temp_action"] = "savings_to_mobile"
+            session_data["current_menu"] = "enter_pin_for_transaction"
+            return ussd_response("CON Enter your PIN to confirm withdrawal:")
+            
+        # handle deposit from mobile money to sacco
+        elif last_menu in ["mpesa_to_sacco", "airtel_to_sacco"]:
+            provider = "M-Pesa" if "mpesa" in last_menu else "Airtel Money"
+            deposit_result = process_deposit(phone_number, amount, provider, "SACCO Wallet")
+            return ussd_response(f"END {deposit_result['message']}")
+            
+        # handle deposit from mobile money to savings
+        elif last_menu in ["mpesa_to_savings", "airtel_to_savings"]:
+            provider = "M-Pesa" if "mpesa" in last_menu else "Airtel Money"
+            deposit_result = process_deposit(phone_number, amount, provider, "Savings")
+            return ussd_response(f"END {deposit_result['message']}")
+    
+    # handle current PIN entry for updating PIN
+    elif menu_type == "process_current_pin":
         current_pin = choice
         registered_user = Tests.query.filter_by(phone_number=phone_number).first()
         if registered_user and verify_pin(registered_user, current_pin):
-            menu_stack.append(current_pin)
-            handle_ussd_request.current_menu = "new_pin"
+            session_data["menu_stack"].append(current_pin)
+            session_data["current_menu"] = "new_pin"
             return ussd_response("CON Enter new PIN:")
         else:
             return ussd_response("END Invalid PIN. Please try again.")
-    elif current_menu == "new_pin":
+    
+    # handle new PIN entry
+    elif menu_type == "process_new_pin":
         new_pin = choice
-        menu_stack.append(new_pin)
-        handle_ussd_request.current_menu = "confirm_new_pin"
+        session_data["menu_stack"].append(new_pin)
+        session_data["current_menu"] = "confirm_new_pin"
         return ussd_response("CON Confirm new PIN:")
-    elif current_menu == "confirm_new_pin":
-        new_pin = menu_stack[-1]
+    
+    # handle PIN confirmation
+    elif menu_type == "process_confirm_pin":
+        new_pin = session_data["menu_stack"][-1]
         confirm_pin = choice
         if new_pin == confirm_pin:
             registered_user = Tests.query.filter_by(phone_number=phone_number).first()
@@ -344,19 +344,18 @@ def handle_menu_options(current_menu, choice, phone_number, menu_stack, session_
             return ussd_response("END PIN changed successfully!")
         else:
             return ussd_response("END PINs do not match. Try again.")
-
-    elif current_menu == "view_account_details":
+    
+    # handle view account details
+    elif menu_type == "process_view_details":
         pin = choice
         registered_user = Tests.query.filter_by(phone_number=phone_number).first()
         if registered_user and verify_pin(registered_user, pin):
             return ussd_response(f"END Account Details:\nPhone: {registered_user.phone_number}\nnational_id: {registered_user.national_id}\n")
         else:
             return ussd_response("END Invalid PIN. Please try again.")
-    elif current_menu == "enquiries" and choice == "1":
-        menu_stack.append("enquiries")
-        handle_ussd_request.current_menu = "mini_statement"
-        return ussd_response("CON Enter your PIN to access Mini Statement:")
-    elif current_menu == "mini_statement":
+    
+    # handle mini statement request
+    elif menu_type == "process_mini_statement":
         user_pin = choice
         correct_pin = get_user_pin(phone_number)
         if user_pin == correct_pin:
@@ -370,30 +369,66 @@ def handle_menu_options(current_menu, choice, phone_number, menu_stack, session_
         else:
             text = "END Incorrect PIN. Please try again."
         return ussd_response(text)
+    
+    return None
 
-    elif current_menu == "enquiries" and choice == "2":
-        handle_ussd_request.current_menu = "faqs"
-        menu_stack.append("enquiries")
-        text = "CON FAQs:\n"
-        for key, value in MENU_MAP["faqs"].items():
-            text += f"{key}. {value.replace('_', ' ').title()} \n"
-        return ussd_response(text)
-    elif current_menu == "faqs" and choice == "1":
-        return ussd_response("END To check balance, go to Enquiries > Mini Statement.")
-    elif current_menu == "faqs" and choice == "2":
-        return ussd_response("END To apply for a loan, navigate to Loans and follow the instructions.")
-    elif current_menu == "faqs" and choice == "3":
-        return ussd_response("END To reset PIN, contact customer support at 0720000000.")
-    elif current_menu == "faqs" and choice == "4":
-        return ussd_response("END You can reach customer support via 0720000000.")
-    elif current_menu == "enquiries" and choice == "3":
-        return ussd_response("END Please contact customer support via 0720000000.")
-    else:
-        return None
-
+def handle_menu_navigation(current_menu, choice, phone_number, session_data):
+    """handles navigation through menus based on user choices"""
+    menu_stack = session_data["menu_stack"]
+    
+    # check for back navigation using #
+    if choice == "#" and current_menu in MENU_MAP:
+        parent_menu = MENU_MAP[current_menu].get("#")
+        if parent_menu:
+            session_data["current_menu"] = parent_menu
+            # Don't add to stack when going back
+            return ussd_response(get_menu_text(parent_menu))
+    
+    # check if user input is mapped to next menu
+    next_menu = MENU_MAP.get(current_menu, {}).get(choice)
+    
+    if next_menu:
+        # store current menu in stack before moving to next
+        menu_stack.append(current_menu)
+        session_data["current_menu"] = next_menu
+        
+        # special case for menus that need input rather than selection
+        if next_menu == "sacco_to_savings":
+            return ussd_response("CON Enter amount to withdraw:")
+        elif next_menu in ["mpesa_sacco", "airtel_sacco", "mpesa_savings", "airtel_savings"]:
+            return ussd_response("CON Enter your mobile number:")
+        elif next_menu == "savings_to_sacco":
+            return ussd_response("CON Enter amount to withdraw:")
+        elif next_menu == "sacco_wallet_deposit":
+            return ussd_response("CON Enter amount to deposit:")
+        elif next_menu in ["mpesa_to_sacco", "airtel_to_sacco", "mpesa_to_savings", "airtel_to_savings"]:
+            return ussd_response("CON Enter your mobile number:")
+        elif next_menu == "update_pin":
+            return ussd_response("CON Enter your current PIN:")
+        elif next_menu == "view_account_details":
+            return ussd_response("CON Enter your PIN to view account details:")
+        elif next_menu == "mini_statement":
+            return ussd_response("CON Enter your PIN to access Mini Statement:")
+        elif next_menu in ["apply_loan", "loan_status"]:
+            return ussd_response("END This feature is coming soon.")
+        elif next_menu == "help":
+            return ussd_response("END Please contact customer support via 0720000000.")
+        elif next_menu in ["faq_balance", "faq_loan", "faq_pin", "faq_support"]:
+            # FAQ responses
+            faq_responses = {
+                "faq_balance": "END To check balance, go to Enquiries > Mini Statement.",
+                "faq_loan": "END To apply for a loan, navigate to Loans and follow the instructions.",
+                "faq_pin": "END To reset PIN, contact customer support at 0720000000.",
+                "faq_support": "END You can reach customer support via 0720000000."
+            }
+            return ussd_response(faq_responses.get(next_menu, "END Information not available."))
+        # standard menus, display the menu text
+        return ussd_response(get_menu_text(next_menu))
+        
+    return None
 
 def handle_ussd_request(session_id, service_code, phone_number, text):
-    """Process USSD requests using a menu map."""
+    """process USSD requests using a menu map with support for navigation."""
     phone_number = normalize_phone_number(phone_number)
 
     if not phone_number:
@@ -401,112 +436,108 @@ def handle_ussd_request(session_id, service_code, phone_number, text):
 
     logging.info(f"USSD Request: phone_number='{phone_number}', text='{text}'")
 
-    if not hasattr(handle_ussd_request, "current_menu"):
-        handle_ussd_request.current_menu = "main"
-        handle_ussd_request.menu_stack = []
-
-    current_menu = handle_ussd_request.current_menu
-    menu_stack = handle_ussd_request.menu_stack
-
+    # initialize or retrieve session data
+    if session_id not in sessions:
+        sessions[session_id] = {
+            "current_menu": "main",
+            "menu_stack": [],
+            "phone_number": phone_number,
+            "logged_in": False
+        }
+    
+    session_data = sessions[session_id]
+    current_menu = session_data["current_menu"]
+    
+    # initial request - show main menu
     if text == "":
-        if handle_ussd_request.current_menu == "logged_in":
-            return handle_menu_options(handle_ussd_request.current_menu, "", phone_number, handle_ussd_request.menu_stack, session_id, service_code)
-        else:
-            handle_ussd_request.current_menu = "main"
-            handle_ussd_request.menu_stack.clear()
-            text = "CON Welcome to our SACCO \n"
-            for key, value in MENU_MAP["main"].items():
-                text += f"{key}. {value.replace('_', ' ').title()} \n"
-            return ussd_response(text)
-    logging.info(f"Current Menu before concat check: {handle_ussd_request.current_menu}")
-    if handle_ussd_request.current_menu == "logged_in":
-        if "*" in text:
-            parts = text.split("*")
-            if len(parts) > 0 and parts[-1].isdigit():
-                text = parts[-1]
-                logging.info(f"Emulator fix: Extracted menu selection: {text}")
-            else:
-                logging.warning(f"Emulator fix: Invalid concatenated input: {text}")
-                return ussd_response("END Invalid choice. Please enter a valid option number.")
-
-
-    if handle_ussd_request.current_menu == "logged_in" and not text.isdigit():
-        logging.warning(f"Unexpected input format in logged_in menu: {text}")
-        return ussd_response("END Invalid choice. Please enter a valid option number.")
-
-    if handle_ussd_request.current_menu in ["main", "register", "enter_national_id", "enter_pin_register"] and "*" in text:
+        # reset session if we're starting fresh
+        session_data["current_menu"] = "main"
+        session_data["menu_stack"] = []
+        session_data["logged_in"] = False
+        return ussd_response(get_menu_text("main"))
+    
+    # for emulators - handle concatenated text
+    processed_text = text
+    if "*" in text and session_data["current_menu"] not in ["enter_national_id", "enter_pin_register"]:
+        # extract last part for menu selection
         parts = text.split("*")
-        if len(parts) == 2 and handle_ussd_request.current_menu in ["main", "register"]:
-            choice = parts[0]
+        processed_text = parts[-1]
+    
+    # handle special registration flow
+    if current_menu in ["main", "register"] and text.startswith("2*"):
+        parts = text.split("*")
+        print(parts)
+        # registration with phone number
+        if len(parts) == 2:
             phone_number_from_text = parts[1]
-            logging.info(f"Extracted choice: {choice}, phone number: {phone_number_from_text}")
-            if choice == "2" and validate_phone_number(phone_number_from_text):
-                logging.info(f"Phone number validated: {phone_number_from_text}")
-                menu_stack.append("register")
-                handle_ussd_request.current_menu = "enter_national_id"
-                menu_stack.append(phone_number_from_text)
-                logging.info(f"Current Menu after concat check: {handle_ussd_request.current_menu}")
+            if validate_phone_number(phone_number_from_text):
+                session_data["menu_stack"].append("register")
+                session_data["current_menu"] = "enter_national_id"
+                session_data["menu_stack"].append(phone_number_from_text)
                 return ussd_response("CON Please enter your National ID number:")
-            else:
-                logging.info(f"Phone number validation failed or choice not '2'.")
-                return ussd_response("END Invalid input.")
-        elif len(parts) == 3 and handle_ussd_request.current_menu == "enter_national_id":
-            choice = parts[0]
+        # registration with phone number and national ID
+        elif len(parts) == 3:
             phone_number_from_text = parts[1]
+            print(phone_number_from_text)
             national_id = parts[2]
-            logging.info(f"Extracted choice: {choice}, phone number: {phone_number_from_text}, national id: {national_id}")
-            if choice == "2" and validate_phone_number(phone_number_from_text) and validate_national_id(national_id):
-                logging.info(f"Phone number and national id validated")
-                menu_stack.append("enter_national_id")
-                handle_ussd_request.current_menu = "enter_pin_register"
-                menu_stack.append(national_id)
+            print(national_id)
+            if validate_phone_number(phone_number_from_text) and validate_national_id(national_id):
+                session_data["menu_stack"].append("enter_national_id")
+                session_data["current_menu"] = "enter_pin_register"
+                session_data["menu_stack"].append(national_id)
                 return ussd_response("CON Please enter your PIN:")
-            else:
-                logging.info("phone number or national id validation failed")
-                return ussd_response("END Invalid input")
-        elif len(parts) == 4 and handle_ussd_request.current_menu == "enter_pin_register":
-            choice = parts[0]
+        # registration complete with PIN
+        elif len(parts) == 4:
             phone_number_from_text = parts[1]
             national_id = parts[2]
             pin = parts[3]
-            logging.info(f"Extracted choice: {choice}, phone number: {phone_number_from_text}, national id: {national_id}, pin: {pin}")
-            if choice == "2" and validate_phone_number(phone_number_from_text) and validate_national_id(national_id):
-                logging.info(f"Phone number and national id validated")
+            if validate_phone_number(phone_number_from_text) and validate_national_id(national_id):
                 registration_message = register_user(phone_number, national_id, pin)
                 return ussd_response(f"END {registration_message['message'] if 'message' in registration_message else registration_message}")
-            else:
-                logging.info(f"Phone number or national id validation failed or choice not '2'.")
-                return ussd_response("END Invalid input.")
-        else:
-            logging.info("concatenated string, but not 2, 3 or 4 parts")
-    logging.info(f"Concatenated check bypassed. Current Menu: {handle_ussd_request.current_menu}")
-
-    choice = text
-    next_menu = MENU_MAP.get(current_menu, {}).get(choice)
-
-    if next_menu:
-        menu_stack.append(current_menu)
-        handle_ussd_request.current_menu = next_menu
-
-        if next_menu == "login":
+                
+    # handle main menu choices
+    if current_menu == "main":
+        if processed_text == "1":
+            session_data["current_menu"] = "login"
             return ussd_response("CON Please enter your PIN to proceed:")
-        elif next_menu == "register":
+        elif processed_text == "2":
+            session_data["current_menu"] = "register"
             return ussd_response("CON Enter your phone number:")
-
-    if current_menu == "login" and "pin" in MENU_MAP["login"]:
-        return handle_login(phone_number, choice, menu_stack, session_id, service_code)
-    elif current_menu in ["register", "enter_national_id", "enter_pin_register"]:
-        return handle_registration(phone_number, choice, menu_stack)
-    else:
-        menu_response = handle_menu_options(current_menu, choice, phone_number, menu_stack, session_id, service_code)
-        if menu_response:
-            return menu_response
-
-        if menu_stack:
-            handle_ussd_request.current_menu = menu_stack.pop()
-            return handle_ussd_request(session_id, service_code, phone_number, "")
-        else:
-            return ussd_response("END Invalid choice.")
+    
+    # handle login
+    if current_menu == "login":
+        return handle_login(phone_number, processed_text, session_data, session_id, service_code)
+    
+    # handle registration process
+    if current_menu in ["register", "enter_national_id", "enter_pin_register"]:
+        return handle_registration(phone_number, processed_text, session_data)
+    
+    # check if the current menu requires specific input processing
+    if current_menu in INPUT_PROCESSING_MENUS:
+        input_processor = INPUT_PROCESSING_MENUS[current_menu]
+        result = process_input(phone_number, input_processor, processed_text, session_data)
+        if result:
+            return result
+    
+    # handle menu navigation for standard menu options
+    nav_result = handle_menu_navigation(current_menu, processed_text, phone_number, session_data)
+    if nav_result:
+        return nav_result
+    
+    # process amount input after mobile number was provided (this also covers many other cases)
+    if session_data.get("temp_mobile") and session_data.get("last_menu"):
+        result = process_input(phone_number, "process_mobile_input", processed_text, session_data)
+        if result:
+            return result
+    
+    # if nothing matched but we're logged in, go back to logged_in menu
+    if session_data.get("logged_in", False):
+        session_data["current_menu"] = "logged_in"
+        return ussd_response(get_menu_text("logged_in"))
+    
+    # if all else fails, return to main menu
+    session_data["current_menu"] = "main"
+    return ussd_response(get_menu_text("main"))
 
     resp = make_response(text, 200)
     resp.headers['Content-Type'] = "text/plain"

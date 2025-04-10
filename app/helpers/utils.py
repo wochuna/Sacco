@@ -229,3 +229,8 @@ def change_user_pin(user, new_pin):
         logging.error(f"Error changing user PIN: {str(e)}")
         return {"status": False, "message": f"Error occurred: {str(e)}"}
 
+def parse_choice(text):
+    if "*" in text:
+        parts = text.split("*")
+        return parts[-1]  # Always return the last part for the choice
+    return text  # Directly return if there's no concatenation
