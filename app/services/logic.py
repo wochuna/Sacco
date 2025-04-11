@@ -9,6 +9,7 @@ from app.helpers.utils import (
     process_deposit,
     validate_phone_number,
     validate_national_id,
+    validate_pin,
     verify_pin,
     get_user_pin,
     get_recent_transactions,
@@ -99,7 +100,7 @@ MENU_MAP = {
     },
 }
 
-# map menus that require input processing 
+# map menus that require input processing
 INPUT_PROCESSING_MENUS = {
     "sacco_to_savings": "process_sacco_to_savings",
     "savings_to_sacco": "process_savings_to_sacco",
@@ -119,7 +120,7 @@ INPUT_PROCESSING_MENUS = {
     "mini_statement": "process_mini_statement",
 }
 
-# parent menu mapping 
+# parent menu mapping
 PARENT_MENUS = {
     "withdrawals": "logged_in",
     "deposits": "logged_in",
@@ -134,7 +135,7 @@ PARENT_MENUS = {
     "faqs": "enquiries",
 }
 
-# menu text templates 
+# menu text templates
 MENU_TEXT = {
     "main": "CON Welcome to our SACCO \n1. Login \n2. Register",
     "logged_in": "CON Choose an option: \n1. Withdrawals \n2. Deposits \n3. Account Management \n4. Loans \n5. Enquiries \n0. Exit \n#. Back to Main",
@@ -151,7 +152,7 @@ MENU_TEXT = {
     "faqs": "CON FAQs:\n1. Faq Balance \n2. Faq Loan \n3. Faq Pin \n4. Faq Support \n#. Back",
 }
 
-# store sessions with navigation history 
+# store sessions with navigation history
 sessions = {}
 
 def get_menu_text(menu_name):
@@ -195,6 +196,7 @@ def handle_registration(phone_number, choice, session_data):
         session_data["current_menu"] = "enter_national_id"
         if validate_phone_number(choice):
             session_data["menu_stack"].append(choice)
+            session_data["registration_phone"] = choice # Store phone
             return ussd_response("CON Please enter your National ID number:")
         else:
             return ussd_response("END Invalid phone number")
@@ -203,13 +205,15 @@ def handle_registration(phone_number, choice, session_data):
         session_data["menu_stack"].append("enter_national_id")
         if validate_national_id(choice):
             session_data["menu_stack"].append(choice)
+            session_data["registration_id"] = choice # Store ID
             session_data["current_menu"] = "enter_pin_register"
             return ussd_response("CON Please enter your PIN:")
         else:
             return ussd_response("END Invalid national ID")
 
     elif session_data["current_menu"] == "enter_pin_register":
-        national_id = session_data["menu_stack"][-2]
+        national_id = session_data.get["registration_id"] # Get stored ID
+        registration_phone = session_data.get("registration_phone") # Get stored phone
         pin = choice
         registration_message = register_user(phone_number, national_id, pin)
         return ussd_response(f"END {registration_message['message'] if 'message' in registration_message else registration_message}")
@@ -432,9 +436,11 @@ def handle_ussd_request(session_id, service_code, phone_number, text):
     phone_number = normalize_phone_number(phone_number)
 
     if not phone_number:
+        logging.error("Invalid phone number format.")
         return ussd_response("END Error: Invalid phone number format.", 400)
 
     logging.info(f"USSD Request: phone_number='{phone_number}', text='{text}'")
+    logging.info(f"Session ID: '{session_id}', Current Menu: '{sessions.get(session_id, {}).get('current_menu')}'")
 
     # initialize or retrieve session data
     if session_id not in sessions:
@@ -444,57 +450,75 @@ def handle_ussd_request(session_id, service_code, phone_number, text):
             "phone_number": phone_number,
             "logged_in": False
         }
-    
+
     session_data = sessions[session_id]
     current_menu = session_data["current_menu"]
-    
+
     # initial request - show main menu
     if text == "":
-        # reset session if we're starting fresh
+        logging.info("Initial request - showing main menu")
         session_data["current_menu"] = "main"
         session_data["menu_stack"] = []
         session_data["logged_in"] = False
         return ussd_response(get_menu_text("main"))
-    
-    # for emulators - handle concatenated text
+
+    # handle concatenated text
     processed_text = text
     if "*" in text and session_data["current_menu"] not in ["enter_national_id", "enter_pin_register"]:
-        # extract last part for menu selection
         parts = text.split("*")
         processed_text = parts[-1]
-    
+        logging.info(f"Concatenated input detected. Parts: '{parts}', Processed text: '{processed_text}'")
+
     # handle special registration flow
-    if current_menu in ["main", "register"] and text.startswith("2*"):
+    if text.startswith("2*"):
         parts = text.split("*")
-        print(parts)
+        logging.info(f"Registration flow triggered with parts: '{parts}'")
         # registration with phone number
         if len(parts) == 2:
             phone_number_from_text = parts[1]
+            logging.info(f"Two-part registration input. Phone: '{phone_number_from_text}'")
             if validate_phone_number(phone_number_from_text):
                 session_data["menu_stack"].append("register")
                 session_data["current_menu"] = "enter_national_id"
-                session_data["menu_stack"].append(phone_number_from_text)
+                session_data["registration_phone"] = phone_number_from_text  # Store phone
                 return ussd_response("CON Please enter your National ID number:")
-        # registration with phone number and national ID
+            else:
+                return ussd_response("END Invalid phone number")
+        # registration with phone number and national ID 
         elif len(parts) == 3:
             phone_number_from_text = parts[1]
-            print(phone_number_from_text)
             national_id = parts[2]
-            print(national_id)
+            logging.info(f"Three-part registration input. Phone: '{phone_number_from_text}', ID: '{national_id}'")
             if validate_phone_number(phone_number_from_text) and validate_national_id(national_id):
-                session_data["menu_stack"].append("enter_national_id")
+                session_data["menu_stack"].append("register")
+                session_data["menu_stack"].append(phone_number_from_text)
                 session_data["current_menu"] = "enter_pin_register"
-                session_data["menu_stack"].append(national_id)
+                session_data["registration_phone"] = phone_number_from_text  # Store phone
+                session_data["registration_id"] = national_id        # Store ID
                 return ussd_response("CON Please enter your PIN:")
+            else:
+                return ussd_response("END Invalid phone number or national ID.")
         # registration complete with PIN
         elif len(parts) == 4:
             phone_number_from_text = parts[1]
             national_id = parts[2]
             pin = parts[3]
-            if validate_phone_number(phone_number_from_text) and validate_national_id(national_id):
-                registration_message = register_user(phone_number, national_id, pin)
+            logging.info(f"Four-part registration input. Phone: '{phone_number_from_text}', ID: '{national_id}', PIN: '{pin}'")
+            if validate_phone_number(phone_number_from_text) and validate_national_id(national_id) and validate_pin(pin):
+                registration_message = register_user(phone_number_from_text, national_id, pin) # Use extracted phone
                 return ussd_response(f"END {registration_message['message'] if 'message' in registration_message else registration_message}")
-                
+            else:
+                error_message = "Invalid phone number, national ID, or PIN."
+                if not validate_phone_number(phone_number_from_text):
+                    error_message = "Invalid phone number."
+                elif not validate_national_id(national_id):
+                    error_message = "Invalid national ID."
+                elif not validate_pin(pin):
+                    error_message = "Invalid PIN."
+                return ussd_response(f"END {error_message}")
+
+        return None # If the '2*' condition is met but doesn't fit the parts, exit this block
+
     # handle main menu choices
     if current_menu == "main":
         if processed_text == "1":
@@ -503,38 +527,68 @@ def handle_ussd_request(session_id, service_code, phone_number, text):
         elif processed_text == "2":
             session_data["current_menu"] = "register"
             return ussd_response("CON Enter your phone number:")
-    
+
     # handle login
     if current_menu == "login":
         return handle_login(phone_number, processed_text, session_data, session_id, service_code)
-    
+
     # handle registration process
-    if current_menu in ["register", "enter_national_id", "enter_pin_register"]:
-        return handle_registration(phone_number, processed_text, session_data)
-    
+    elif current_menu == "register":
+        if validate_phone_number(processed_text):
+            session_data["menu_stack"].append("register")
+            session_data["current_menu"] = "enter_national_id"
+            session_data["registration_phone"] = processed_text
+            return ussd_response("CON Please enter your National ID number:")
+        else:
+            return ussd_response("END Invalid phone number")
+    elif current_menu == "enter_national_id":
+        # Check if we received a three-part input
+        if "*" in text and len(text.split("*")) == 3:
+            parts = text.split("*")
+            national_id = parts[2]
+            if validate_national_id(national_id):
+                session_data["registration_id"] = national_id
+                session_data["current_menu"] = "enter_pin_register"
+                return ussd_response("CON Please enter your PIN:")
+            else:
+                return ussd_response("END Invalid national ID")
+        elif validate_national_id(processed_text):
+            session_data["menu_stack"].append(processed_text)
+            session_data["registration_id"] = processed_text
+            session_data["current_menu"] = "enter_pin_register"
+            return ussd_response("CON Please enter your PIN:")
+        else:
+            return ussd_response("END Invalid national ID")
+    elif current_menu == "enter_pin_register":
+        national_id = session_data.get("registration_id")
+        registration_phone = session_data.get("registration_phone")
+        pin = processed_text # Use processed_text for PIN
+        registration_message = register_user(registration_phone, national_id, pin)
+        return ussd_response(f"END {registration_message['message'] if 'message' in registration_message else registration_message}")
+
     # check if the current menu requires specific input processing
     if current_menu in INPUT_PROCESSING_MENUS:
         input_processor = INPUT_PROCESSING_MENUS[current_menu]
         result = process_input(phone_number, input_processor, processed_text, session_data)
         if result:
             return result
-    
+
     # handle menu navigation for standard menu options
     nav_result = handle_menu_navigation(current_menu, processed_text, phone_number, session_data)
     if nav_result:
         return nav_result
-    
+
     # process amount input after mobile number was provided (this also covers many other cases)
     if session_data.get("temp_mobile") and session_data.get("last_menu"):
         result = process_input(phone_number, "process_mobile_input", processed_text, session_data)
         if result:
             return result
-    
+
     # if nothing matched but we're logged in, go back to logged_in menu
     if session_data.get("logged_in", False):
         session_data["current_menu"] = "logged_in"
         return ussd_response(get_menu_text("logged_in"))
-    
+
     # if all else fails, return to main menu
     session_data["current_menu"] = "main"
     return ussd_response(get_menu_text("main"))

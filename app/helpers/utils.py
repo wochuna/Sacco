@@ -34,7 +34,11 @@ def validate_phone_number(phone_number):
 
 def validate_national_id(national_id):
     """Validate national ID: Must be 8 or 9 digits."""
-    return bool(re.match(r"^\d{8,9}$", national_id))
+    logging.info(f"Validating National ID: '{national_id}'")  # Debug print
+    is_valid = bool(re.match(r"^\d{8,9}$", national_id))
+    logging.info(f"Validation result: {is_valid}")      # Debug print
+    return is_valid
+
 
 def validate_pin(pin):
     """Validate pin:Must be 4 digits."""
@@ -48,6 +52,8 @@ def register_user(phone_number, national_id, pin):
         logging.warning(f"Invalid phone number: '{phone_number}'")
         return {"status": False, "message": "Invalid phone number.Please try again"}
 
+    logging.info(f"Registering user with phone: '{phone_number}', ID: '{national_id}', PIN: '{pin}'") # Debug print
+    
     if not validate_national_id(national_id):
         logging.warning(f"Invalid national ID: '{national_id}'")
         return {"status": False, "message": "Invalid national ID.Please try again"}
@@ -229,8 +235,3 @@ def change_user_pin(user, new_pin):
         logging.error(f"Error changing user PIN: {str(e)}")
         return {"status": False, "message": f"Error occurred: {str(e)}"}
 
-def parse_choice(text):
-    if "*" in text:
-        parts = text.split("*")
-        return parts[-1]  # Always return the last part for the choice
-    return text  # Directly return if there's no concatenation
